@@ -27,4 +27,6 @@
   - `pnpm lint`: ESLint. Bloqueia `else`, `Math.random` e `phaser` importado na lógica pura.
   - `pnpm format:check`: Prettier. `pnpm format` corrige.
   - `pnpm build`: `tsc` e `vite build`.
-- O projeto ainda não tem testes nem CI.
+- O CI (`.github/workflows/ci.yml`) roda essas três checagens em PRs para `development` e `main` e em push na `development`.
+- O projeto ainda não tem testes.
+- PRs com commit só de formatação: registre o hash que chega na `development` em `.git-blame-ignore-revs`. Com squash, é o hash do squash.
