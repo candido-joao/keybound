@@ -10,7 +10,9 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
-    # Reviews only PRs into the default branch (development). Release PRs into main were already reviewed there.
+    # Explicit so reviews don't depend on which branch is the repo default.
+    base_branches:
+      - development
   path_instructions:
     - path: 'src/combat/balance.ts'
       instructions: >-
