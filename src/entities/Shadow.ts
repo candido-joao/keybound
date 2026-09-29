@@ -1,18 +1,8 @@
 import Phaser from 'phaser';
+import { BOSS_DASH_EVERY_MS, type ShadowConfig } from '../combat/balance';
 import type { GameClock } from '../core/clock';
 
-export interface ShadowConfig {
-  hp: number;
-  speed: number;
-  scale: number;
-  boss?: boolean;
-}
-
-export const SHADOW_BASIC: ShadowConfig = { hp: 9, speed: 85, scale: 1 };
-export const SHADOW_BOSS: ShadowConfig = { hp: 90, speed: 70, scale: 2.4, boss: true };
-
 const SPAWN_MS = 550;
-const DASH_EVERY_MS = 2600;
 const DASH_MS = 420;
 const DASH_TELEGRAPH_MS = 380;
 const DASH_SPEED = 460;
@@ -41,7 +31,7 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
     this.clock = clock;
     this.hp = config.hp;
     this.activeAt = clock.now + SPAWN_MS;
-    this.nextDashAt = clock.now + SPAWN_MS + DASH_EVERY_MS;
+    this.nextDashAt = clock.now + SPAWN_MS + BOSS_DASH_EVERY_MS;
     this.setDepth(5).setScale(config.scale, 0.1).setAlpha(0);
     scene.tweens.add({ targets: this, scaleY: config.scale, alpha: 1, duration: SPAWN_MS, ease: 'Back.Out' });
   }
@@ -69,7 +59,7 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
       if (time >= this.dashLaunchAt) this.launchDash();
       if (time < this.dashingUntil) return;
       if (time >= this.nextDashAt) {
-        this.nextDashAt = time + DASH_EVERY_MS;
+        this.nextDashAt = time + BOSS_DASH_EVERY_MS;
         this.telegraphDash(target, time);
         return;
       }

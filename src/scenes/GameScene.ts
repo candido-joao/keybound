@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { COLORS, DOOR_COL, DOOR_ROW, GAME_W, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W, ROOM_X, ROOM_Y, TILE, tileX, tileY } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
-import { BASE_STATS, computeStats, type Item } from '../combat/stats';
+import { BASE_STATS, bossForDepth, enemiesPerRoom, shadowForDepth } from '../combat/balance';
+import { computeStats, type Item } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng, randomSeed } from '../core/rng';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
-import { SHADOW_BASIC, SHADOW_BOSS, Shadow } from '../entities/Shadow';
+import { Shadow } from '../entities/Shadow';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 
 export interface RunData {
@@ -234,7 +235,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnEnemies(room: RoomNode) {
     if (room.type === 'boss') {
-      const boss = new Shadow(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW - 1), { ...SHADOW_BOSS, hp: SHADOW_BOSS.hp + (this.depth - 1) * 30 });
+      const boss = new Shadow(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW - 1), bossForDepth(this.depth));
       this.enemies.add(boss);
       boss.initBody();
       this.showBanner('Colosso Sombrio');
@@ -250,9 +251,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const count = rng.int(2, 3 + this.depth);
+    const { min, max } = enemiesPerRoom(this.depth);
+    const count = rng.int(min, max);
+    const config = shadowForDepth(this.depth);
     for (const { col, row } of rng.shuffle(cells).slice(0, count)) {
-      const shadow = new Shadow(this, this.clock, tileX(col), tileY(row), { ...SHADOW_BASIC, hp: SHADOW_BASIC.hp + (this.depth - 1) * 3 });
+      const shadow = new Shadow(this, this.clock, tileX(col), tileY(row), config);
       this.enemies.add(shadow);
       shadow.initBody();
     }
