@@ -13,6 +13,7 @@ Feito com [Phaser 4](https://phaser.io), TypeScript e Vite.
 | `Tab` (segurar) | Mapa expandido                     |
 | `Esc`           | Pausar                             |
 | `R`             | Nova run (no pause ou após morrer) |
+| `L`             | Trocar idioma (no pause)           |
 
 Cada andar tem uma **sala do tesouro** e uma **sala do boss**. Os dois dão um item; derrotar o boss abre o portal para o próximo andar. Itens podem se repetir e seus efeitos acumulam.
 

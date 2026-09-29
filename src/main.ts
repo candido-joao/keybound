@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { COLORS, GAME_H, GAME_W } from './config';
+import { initLocale } from './i18n/apply';
 import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { HudScene } from './scenes/HudScene';
 import { PauseScene } from './scenes/PauseScene';
+
+initLocale();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

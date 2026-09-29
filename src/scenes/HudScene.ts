@@ -3,6 +3,7 @@ import { addItemIcon } from '../combat/items';
 import { type Item, countItems } from '../combat/stats';
 import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_W, ROOM_X } from '../config';
 import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
+import { type Locale, getLocale, t } from '../i18n';
 import type { GameScene } from './GameScene';
 
 interface MapLayout {
@@ -45,6 +46,8 @@ export class HudScene extends Phaser.Scene {
   private icons: Phaser.GameObjects.GameObject[] = [];
   private iconsKey = '';
   private floorLabel!: Phaser.GameObjects.Text;
+  private labelDepth = 0;
+  private labelLocale: Locale | null = null;
   private tab!: Phaser.Input.Keyboard.Key;
 
   constructor() {
@@ -57,6 +60,8 @@ export class HudScene extends Phaser.Scene {
     this.hearts = [];
     this.icons = [];
     this.iconsKey = '';
+    this.labelDepth = 0;
+    this.labelLocale = null;
     this.floorLabel = this.add
       .text(GAME_W / 2, BIG.y - 16, '', {
         fontFamily: 'monospace',
@@ -79,8 +84,17 @@ export class HudScene extends Phaser.Scene {
     const expanded = this.tab.isDown && !game.scene.isPaused();
     this.drawHearts(game.player.health, game.player.stats.maxHealth);
     this.drawMinimap(game, expanded ? BIG : MINI, expanded);
-    this.floorLabel.setVisible(expanded).setText(`Andar ${game.depth}`);
+    this.floorLabel.setVisible(expanded);
+    this.updateFloorLabel(game.depth);
     this.drawItemIcons(game.items);
+  }
+
+  private updateFloorLabel(depth: number) {
+    const locale = getLocale();
+    if (depth === this.labelDepth && locale === this.labelLocale) return;
+    this.labelDepth = depth;
+    this.labelLocale = locale;
+    this.floorLabel.setText(t('floor.label', { n: depth }));
   }
 
   private drawHearts(health: number, maxHealth: number) {

@@ -1,3 +1,4 @@
+import { type MessageKey, t } from '../i18n';
 import { STAT_LIMITS } from './balance';
 
 export interface PlayerStats {
@@ -27,8 +28,8 @@ export interface PlayerStats {
  */
 export interface Item {
   id: string;
-  name: string;
-  description: string;
+  name: MessageKey;
+  description: MessageKey;
   color: number;
   apply(stats: PlayerStats): PlayerStats;
 }
@@ -52,5 +53,5 @@ export function countItems(items: readonly Item[]): Map<Item, number> {
 
 /** "Name ×2 · Other" — one entry per distinct item, in pickup order. */
 export function summarizeItems(items: readonly Item[]): string {
-  return [...countItems(items)].map(([item, n]) => (n > 1 ? `${item.name} ×${n}` : item.name)).join(' · ');
+  return [...countItems(items)].map(([item, n]) => (n > 1 ? `${t(item.name)} ×${n}` : t(item.name))).join(' · ');
 }
