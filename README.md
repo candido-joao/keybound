@@ -48,6 +48,6 @@ Para adicionar um item, basta incluí-lo em `src/combat/items.ts` e colocar o í
 
 ## Licença
 
-O código está disponível para leitura e estudo sob a [PolyForm Strict 1.0.0](LICENSE): você pode ler, rodar e experimentar para fins não comerciais, mas não pode redistribuir, publicar versões modificadas nem usar comercialmente.
+O código está disponível para leitura e estudo sob a [PolyForm Strict 1.0.0](LICENSE): você pode ler e rodar o jogo para fins não comerciais. Não pode alterar o código nem criar obras derivadas, mesmo sem publicá-las, nem redistribuir ou usar comercialmente.
 
 Aprender com o código é bem-vindo; técnicas e ideias não precisam de permissão. O nome Keybound, a arte e o áudio são reservados e não estão cobertos por essa licença.
