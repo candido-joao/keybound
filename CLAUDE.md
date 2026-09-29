@@ -9,6 +9,18 @@
 - Nunca abra PR de uma branch de trabalho direto para a `main`.
 - Quem aprova e mescla os PRs é o dono do repositório. Não aprove nem mescle.
 
+## Código
+
+- Lógica simples e robusta. Funções curtas, com uma responsabilidade.
+- Não use `else`: prefira guard clauses e early return.
+- Comente só o porquê que o código não mostra. Nada de comentário que repete o código.
+- Separe a lógica de jogo pura (atributos, vida, drops, desbloqueios, geração de andar) do Phaser. Ela não importa `phaser` e fica testável isolada; cenas e entidades só leem esse estado e desenham. A migração é gradual, feita junto com cada mudança.
+- Conteúdo (itens, inimigos, bosses, fases, personagens) vive em registros de dados, no padrão de `ITEMS`.
+- Tudo que afeta a jogabilidade usa o `Rng` da seed, nunca `Math.random`. Mesma seed, mesma run.
+- Estabilidade: nada no loop de update lança exceção; dados salvos são versionados e, se inválidos, voltam ao padrão.
+- Performance: sem alocação por frame em caminhos quentes (loops simples em vez de `filter`/`map` no `update`), pool de objetos para projéteis e partículas, redesenho do HUD só quando o estado muda.
+- Arte e áudio: sem asset fornecido, use o fallback (texturas geradas no `BootScene`, som sintetizado). O asset real substitui o fallback sem mudar a lógica.
+
 ## Verificação
 
 - `pnpm build` roda `tsc` e `vite build`. Precisa passar antes de qualquer push.
