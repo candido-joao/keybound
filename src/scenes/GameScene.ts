@@ -23,6 +23,7 @@ import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { Shadow } from '../entities/Shadow';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
+import { t } from '../i18n';
 
 export interface RunData {
   seed?: string;
@@ -107,7 +108,7 @@ export class GameScene extends Phaser.Scene {
 
     this.setupCollisions();
     this.enterRoom(this.floor.start);
-    this.showBanner(`Andar ${this.depth}`);
+    this.showBanner(t('floor.label', { n: this.depth }));
 
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
     this.scene.bringToTop('hud');
@@ -252,7 +253,7 @@ export class GameScene extends Phaser.Scene {
       const boss = new Shadow(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW - 1), bossForDepth(this.depth));
       this.enemies.add(boss);
       boss.initBody();
-      this.showBanner('Colosso Sombrio');
+      this.showBanner(t('boss.shadow-colossus'));
       return;
     }
 
@@ -324,7 +325,7 @@ export class GameScene extends Phaser.Scene {
   private grantItem(item: Item) {
     this.items.push(item);
     this.player.setStats(computeStats(BASE_STATS, this.items));
-    this.showBanner(item.name, item.description);
+    this.showBanner(t(item.name), t(item.description));
   }
 
   private spawnPortal() {
@@ -366,7 +367,7 @@ export class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.physics.pause();
     this.player.setTint(0x555555);
-    this.showBanner('Engolido pelas sombras', 'R para nova run', 0);
+    this.showBanner(t('death.title'), t('death.hint'), 0);
     this.input.keyboard!.once('keydown-R', () => {
       this.physics.resume();
       this.scene.restart({ seed: randomSeed() } satisfies RunData);

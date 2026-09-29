@@ -16,6 +16,7 @@
 - Comente só o porquê que o código não mostra. Nada de comentário que repete o código.
 - Separe a lógica de jogo pura (atributos, vida, drops, desbloqueios, geração de andar) do Phaser. Ela não importa `phaser` e fica testável isolada; cenas e entidades só leem esse estado e desenham. A migração é gradual, feita junto com cada mudança.
 - Conteúdo (itens, inimigos, bosses, fases, personagens) vive em registros de dados, no padrão de `ITEMS`.
+- Texto visível ao jogador fica em `src/i18n`, nunca literal no código. `pt-BR.ts` define as chaves; `en-US.ts` e `es.ts` precisam traduzir todas (o `tsc` falha se faltar). Registros de conteúdo guardam a chave, não o texto.
 - Tudo que afeta a jogabilidade usa o `Rng` da seed, nunca `Math.random`. Mesma seed, mesma run.
 - Estabilidade: nada no loop de update lança exceção; dados salvos são versionados e, se inválidos, voltam ao padrão.
 - Performance: sem alocação por frame em caminhos quentes (loops simples em vez de `filter`/`map` no `update`), pool de objetos para projéteis e partículas, redesenho do HUD só quando o estado muda.
