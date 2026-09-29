@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://docs.coderabbit.ai/schema.json
+language: pt-BR
+
+reviews:
+  profile: chill
+  # The owner approves and merges; the bot only comments.
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # Reviews only PRs into the default branch (development). Release PRs into main were already reviewed there.
+  path_instructions:
+    - path: 'src/combat/balance.ts'
+      instructions: >-
+        Balance values were playtested and approved by the owner. Flag only typos or inconsistent units, never
+        suggest new numbers.
+    - path: 'src/{combat,core,floor}/**/*.ts'
+      instructions: >-
+        Pure game logic: no Phaser, no Math.random (use the seeded Rng), no exceptions reachable from the update
+        loop. Must be testable in isolation.
+    - path: 'src/{scenes,entities}/**/*.ts'
+      instructions: >-
+        Phaser adapters: read pure game state and draw. Watch for per-frame allocations in update paths
+        (filter/map/spread, new objects), missing object pooling for bolts and particles, HUD redraws when state
+        did not change, and objects or listeners not destroyed on room or scene change.
+  tools:
+    eslint:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
