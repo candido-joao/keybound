@@ -5,6 +5,8 @@ import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { HudScene } from './scenes/HudScene';
 import { PauseScene } from './scenes/PauseScene';
+import { SummaryScene } from './scenes/SummaryScene';
+import { TitleScene } from './scenes/TitleScene';
 
 initLocale();
 
@@ -23,7 +25,7 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: new URLSearchParams(location.search).has('debug') },
   },
-  scene: [BootScene, GameScene, HudScene, PauseScene],
+  scene: [BootScene, TitleScene, GameScene, HudScene, PauseScene, SummaryScene],
 });
 
 // Dev-only handle for debugging from the browser console.
