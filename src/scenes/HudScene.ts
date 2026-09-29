@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { addItemIcon } from '../combat/items';
-import type { Item } from '../combat/stats';
-import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W } from '../config';
-import { DIRS, type Dir } from '../floor/FloorGenerator';
+import { type Item, countItems } from '../combat/stats';
+import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_W, ROOM_X } from '../config';
+import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
 import type { GameScene } from './GameScene';
 
 interface MapLayout {
@@ -21,10 +21,21 @@ const BIG: MapLayout = {
   cellH: MINI.cellH * BIG_SCALE,
 };
 
-// Collected items sit under the minimap, in the margin outside the room.
+/** Special rooms get a colored inset on the map. */
+const MAP_MARKER: Record<RoomType, number | undefined> = {
+  start: undefined,
+  normal: undefined,
+  treasure: COLORS.treasure,
+  boss: COLORS.boss,
+};
+
+// Collected items sit under the minimap, centered in the margin right of the room.
 // Icons are 32px pixel art; any non-integer downscale would eat pixels.
 const ICON_SIZE = 32;
+const ICON_GAP = 4;
 const ICONS_PER_ROW = 3;
+const ROOM_RIGHT = ROOM_X + ROOM_W;
+const ICONS_X = ROOM_RIGHT + (GAME_W - ROOM_RIGHT - (ICONS_PER_ROW * (ICON_SIZE + ICON_GAP) - ICON_GAP)) / 2;
 const ICONS_Y = MINI.y + FLOOR_GRID_H * MINI.cellH + 14;
 
 /** Runs on top of GameScene and reads its state every frame. */
@@ -104,7 +115,7 @@ export class HudScene extends Phaser.Scene {
       const current = room === game.room;
       g.fillStyle(current ? 0xffffff : room.visited ? 0x8d84b8 : 0x3d365e).fillRect(x, y, cellW - gap, cellH - gap);
 
-      const marker = room.type === 'boss' ? 0xe8435a : room.type === 'treasure' ? 0xffd23f : undefined;
+      const marker = MAP_MARKER[room.type];
       if (marker !== undefined) {
         const inset = expanded ? 8 : 3;
         g.fillStyle(marker).fillRect(x + inset, y + inset * 0.7, cellW - gap - inset * 2, cellH - gap - inset * 1.4);
@@ -120,12 +131,9 @@ export class HudScene extends Phaser.Scene {
     this.icons.forEach((o) => o.destroy());
     this.icons = [];
 
-    const counts = new Map<Item, number>();
-    for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1);
-
-    [...counts].forEach(([item, n], i) => {
-      const x = MINI.x + (i % ICONS_PER_ROW) * (ICON_SIZE + 4) + ICON_SIZE / 2;
-      const y = ICONS_Y + Math.floor(i / ICONS_PER_ROW) * (ICON_SIZE + 4) + ICON_SIZE / 2;
+    [...countItems(items)].forEach(([item, n], i) => {
+      const x = ICONS_X + (i % ICONS_PER_ROW) * (ICON_SIZE + ICON_GAP) + ICON_SIZE / 2;
+      const y = ICONS_Y + Math.floor(i / ICONS_PER_ROW) * (ICON_SIZE + ICON_GAP) + ICON_SIZE / 2;
       this.icons.push(addItemIcon(this, x, y, item).setAlpha(0.55));
       if (n > 1) {
         const count = this.add.text(x + ICON_SIZE / 2, y + ICON_SIZE / 2, `${n}`, { fontFamily: 'monospace', fontSize: '10px', color: COLORS.text, stroke: '#000', strokeThickness: 3 });

@@ -55,9 +55,14 @@ export function computeStats(base: PlayerStats, items: readonly Item[]): PlayerS
   return stats;
 }
 
-/** "Name ×2 · Other" — one entry per distinct item, in pickup order. */
-export function summarizeItems(items: readonly Item[]): string {
+/** Copies held per distinct item, in pickup order. */
+export function countItems(items: readonly Item[]): Map<Item, number> {
   const counts = new Map<Item, number>();
   for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1);
-  return [...counts].map(([item, n]) => (n > 1 ? `${item.name} ×${n}` : item.name)).join(' · ');
+  return counts;
+}
+
+/** "Name ×2 · Other" — one entry per distinct item, in pickup order. */
+export function summarizeItems(items: readonly Item[]): string {
+  return [...countItems(items)].map(([item, n]) => (n > 1 ? `${item.name} ×${n}` : item.name)).join(' · ');
 }

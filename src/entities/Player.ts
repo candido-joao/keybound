@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { PlayerStats } from '../combat/stats';
+import type { GameClock } from '../core/clock';
 import type { BoltSpec } from './Bolt';
 
 type Keys = Record<'W' | 'A' | 'S' | 'D' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', Phaser.Input.Keyboard.Key>;
@@ -10,17 +11,19 @@ const KEY_ORBIT = 20;
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
   health: number;
+  private clock: GameClock;
   private keys: Keys;
   private keyblade: Phaser.GameObjects.Image;
   private aim = Math.PI / 2;
   private nextShotAt = 0;
   private invulnUntil = 0;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, stats: PlayerStats) {
+  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, stats: PlayerStats) {
     super(scene, x, y, 'player');
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    this.clock = clock;
     this.stats = stats;
     this.health = stats.maxHealth;
     this.setDepth(10);
@@ -38,14 +41,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   get invulnerable(): boolean {
-    return this.scene.time.now < this.invulnUntil;
+    return this.clock.now < this.invulnUntil;
   }
 
   /** Returns true if the hit landed (not during i-frames). */
   hurt(halfHearts: number): boolean {
     if (this.invulnerable || this.health <= 0) return false;
     this.health = Math.max(0, this.health - halfHearts);
-    this.invulnUntil = this.scene.time.now + INVULN_MS;
+    this.invulnUntil = this.clock.now + INVULN_MS;
     this.scene.cameras.main.shake(120, 0.006);
     return true;
   }
@@ -63,7 +66,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     body.setVelocity(Phaser.Math.Linear(body.velocity.x, tx, 0.22), Phaser.Math.Linear(body.velocity.y, ty, 0.22));
 
     if (ix !== 0) this.setFlipX(ix < 0);
-    this.setAlpha(this.invulnerable ? (Math.floor(this.scene.time.now / 80) % 2 ? 0.35 : 1) : 1);
+    this.setAlpha(this.invulnerable ? (Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1) : 1);
   }
 
   /** Arrow keys aim and fire. Returns bolts to spawn this frame, if any. */
@@ -72,8 +75,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const sx = (k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0);
     const sy = (k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0);
     const firing = sx !== 0 || sy !== 0;
-    // Isaac shoots in 4 directions; the last pressed axis wins on diagonals.
-    if (firing) this.aim = sx !== 0 && sy === 0 ? Math.atan2(0, sx) : sy !== 0 && sx === 0 ? Math.atan2(sy, 0) : this.aim;
+    this.aim = axisAim(sx, sy) ?? this.aim;
 
     this.updateKeyblade();
     if (!firing || time < this.nextShotAt) return [];
@@ -121,4 +123,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.keyblade?.destroy();
     super.destroy(fromScene);
   }
+}
+
+/** Isaac shoots in 4 directions; on diagonals the current aim holds, so the last pressed axis wins. */
+function axisAim(sx: number, sy: number): number | undefined {
+  if (sx !== 0 && sy !== 0) return undefined;
+  if (sx !== 0) return Math.atan2(0, sx);
+  if (sy !== 0) return Math.atan2(sy, 0);
+  return undefined;
 }

@@ -3,8 +3,8 @@ import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, TILE } from '../config';
 
 /**
- * Placeholder art drawn with Graphics. Swap each texture for a real sprite later
- * by loading an image under the same key; nothing else needs to change.
+ * Placeholder art drawn with Graphics. Real art loads in preload() under its own
+ * key, as item icons do (`item:<id>`); addItemIcon falls back to the baked orb.
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
