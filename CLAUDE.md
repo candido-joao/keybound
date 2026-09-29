@@ -23,5 +23,8 @@
 
 ## Verificação
 
-- `pnpm build` roda `tsc` e `vite build`. Precisa passar antes de qualquer push.
+- Antes de qualquer push, precisam passar:
+  - `pnpm lint`: ESLint. Bloqueia `else`, `Math.random` e `phaser` importado na lógica pura.
+  - `pnpm format:check`: Prettier. `pnpm format` corrige.
+  - `pnpm build`: `tsc` e `vite build`.
 - O projeto ainda não tem testes nem CI.

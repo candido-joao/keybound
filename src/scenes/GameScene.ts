@@ -255,7 +255,7 @@ export class GameScene extends Phaser.Scene {
     const count = rng.int(min, max);
     const config = shadowForDepth(this.depth);
     for (const { col, row } of rng.shuffle(cells).slice(0, count)) {
-      const shadow = new Shadow(this, this.clock, tileX(col), tileY(row), config);
+      const shadow = new Shadow(this, this.clock, tileX(col), tileY(row), config, rng.next() * 1000);
       this.enemies.add(shadow);
       shadow.initBody();
     }

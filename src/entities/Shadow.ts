@@ -22,13 +22,15 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
   private dashTarget?: Phaser.GameObjects.Components.Transform;
   private dashingUntil = 0;
   private knockedUntil = 0;
-  private wobbleSeed = Math.random() * 1000;
+  private wobbleSeed: number;
 
-  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, config: ShadowConfig) {
+  /** `wobbleSeed` offsets the chase wobble so a pack doesn't move in lockstep; pass it from the seeded Rng. */
+  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, config: ShadowConfig, wobbleSeed = 0) {
     super(scene, x, y, 'shadow');
     scene.add.existing(this);
     this.config = config;
     this.clock = clock;
+    this.wobbleSeed = wobbleSeed;
     this.hp = config.hp;
     this.activeAt = clock.now + SPAWN_MS;
     this.nextDashAt = clock.now + SPAWN_MS + BOSS_DASH_EVERY_MS;
@@ -105,8 +107,8 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
     const scene = this.scene;
     for (let i = 0; i < 8 * this.config.scale; i++) {
       const p = scene.add.image(this.x, this.y, 'particle').setTint(0x2a2144).setDepth(4);
-      const a = Math.random() * Math.PI * 2;
-      const d = 20 + Math.random() * 30 * this.config.scale;
+      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const d = 20 + Phaser.Math.FloatBetween(0, 30 * this.config.scale);
       scene.tweens.add({ targets: p, x: this.x + Math.cos(a) * d, y: this.y + Math.sin(a) * d, alpha: 0, scale: 0.3, duration: 380, onComplete: () => p.destroy() });
     }
     this.destroy();
