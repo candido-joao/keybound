@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
+import { PLAYER_INVULN_MS } from '../combat/balance';
 import type { PlayerStats } from '../combat/stats';
 import type { GameClock } from '../core/clock';
 import type { BoltSpec } from './Bolt';
 
 type Keys = Record<'W' | 'A' | 'S' | 'D' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', Phaser.Input.Keyboard.Key>;
 
-const INVULN_MS = 900;
 const KEY_ORBIT = 20;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -48,7 +48,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   hurt(halfHearts: number): boolean {
     if (this.invulnerable || this.health <= 0) return false;
     this.health = Math.max(0, this.health - halfHearts);
-    this.invulnUntil = this.clock.now + INVULN_MS;
+    this.invulnUntil = this.clock.now + PLAYER_INVULN_MS;
     this.scene.cameras.main.shake(120, 0.006);
     return true;
   }

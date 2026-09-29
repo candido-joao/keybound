@@ -1,3 +1,5 @@
+import { STAT_LIMITS } from './balance';
+
 export interface PlayerStats {
   /** Max movement speed, px/s. */
   speed: number;
@@ -19,22 +21,9 @@ export interface PlayerStats {
   boltScale: number;
 }
 
-export const BASE_STATS: PlayerStats = {
-  speed: 210,
-  damage: 3.5,
-  fireDelay: 360,
-  shotSpeed: 420,
-  range: 330,
-  maxHealth: 6,
-  shotCount: 1,
-  spread: 0,
-  homing: 0,
-  boltScale: 1,
-};
-
 /**
  * Items never mutate the player directly. Each one is a pure step in a pipeline
- * from BASE_STATS, so stacking order is explicit and stats can always be recomputed.
+ * from the base stats, so stacking order is explicit and stats can always be recomputed.
  */
 export interface Item {
   id: string;
@@ -46,12 +35,11 @@ export interface Item {
 
 export function computeStats(base: PlayerStats, items: readonly Item[]): PlayerStats {
   const stats = items.reduce((s, item) => item.apply({ ...s }), { ...base });
-  stats.fireDelay = Math.max(80, stats.fireDelay);
-  stats.speed = Math.min(420, stats.speed);
-  // Items can stack, so multiplicative ones need a ceiling.
-  stats.range = Math.min(900, stats.range);
-  stats.boltScale = Math.min(2.5, stats.boltScale);
-  stats.shotCount = Math.min(7, stats.shotCount);
+  stats.fireDelay = Math.max(STAT_LIMITS.minFireDelay, stats.fireDelay);
+  stats.speed = Math.min(STAT_LIMITS.maxSpeed, stats.speed);
+  stats.range = Math.min(STAT_LIMITS.maxRange, stats.range);
+  stats.boltScale = Math.min(STAT_LIMITS.maxBoltScale, stats.boltScale);
+  stats.shotCount = Math.min(STAT_LIMITS.maxShotCount, stats.shotCount);
   return stats;
 }
 
