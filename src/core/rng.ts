@@ -25,10 +25,6 @@ export class Rng {
     return this.next() < p;
   }
 
-  pick<T>(items: readonly T[]): T {
-    return items[Math.floor(this.next() * items.length)];
-  }
-
   shuffle<T>(items: T[]): T[] {
     for (let i = items.length - 1; i > 0; i--) {
       const j = Math.floor(this.next() * (i + 1));

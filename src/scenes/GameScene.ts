@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { COLORS, DOOR_COL, DOOR_ROW, GAME_W, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W, ROOM_X, ROOM_Y, TILE, tileX, tileY } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { BASE_STATS, computeStats, type Item } from '../combat/stats';
+import { GameClock } from '../core/clock';
 import { Rng, randomSeed } from '../core/rng';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { SHADOW_BASIC, SHADOW_BOSS, Shadow } from '../entities/Shadow';
-import { DIRS, type Dir, type Floor, type RoomNode, generateFloor } from '../floor/FloorGenerator';
+import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 
 export interface RunData {
   seed?: string;
@@ -23,6 +24,14 @@ const ENTRY: Record<Dir, { col: number; row: number }> = {
   right: { col: ROOM_COLS - 2, row: DOOR_ROW },
 };
 
+/** Lintel color over each door, by the room it leads to. */
+const DOOR_MARKER: Record<RoomType, number> = {
+  start: COLORS.doorMarker,
+  normal: COLORS.doorMarker,
+  treasure: COLORS.treasure,
+  boss: COLORS.boss,
+};
+
 export class GameScene extends Phaser.Scene {
   seed!: string;
   depth!: number;
@@ -30,6 +39,8 @@ export class GameScene extends Phaser.Scene {
   room!: RoomNode;
   items: Item[] = [];
   player!: Player;
+  /** Pauses with the scene; entities time their windows against it. */
+  private clock!: GameClock;
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
@@ -52,8 +63,9 @@ export class GameScene extends Phaser.Scene {
     this.transitioning = false;
     this.gameOver = false;
     this.roomDecor = [];
+    this.clock = new GameClock();
 
-    this.items = (data.itemIds ?? []).map((id) => ITEMS.find((i) => i.id === id)!).filter(Boolean);
+    this.items = (data.itemIds ?? []).flatMap((id) => ITEMS.find((i) => i.id === id) ?? []);
     this.floor = generateFloor(new Rng(`${this.seed}:floor:${this.depth}`), this.depth);
 
     // Items stack, so the pool never runs dry: unowned items pop first, repeats after.
@@ -75,7 +87,7 @@ export class GameScene extends Phaser.Scene {
     this.bolts = this.physics.add.group();
 
     const stats = computeStats(BASE_STATS, this.items);
-    this.player = new Player(this, tileX(DOOR_COL), tileY(DOOR_ROW), stats);
+    this.player = new Player(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW), stats);
     if (data.health !== undefined) this.player.health = Math.min(stats.maxHealth, data.health);
 
     this.setupCollisions();
@@ -93,12 +105,6 @@ export class GameScene extends Phaser.Scene {
     this.scene.pause();
     this.scene.launch('pause');
     this.scene.bringToTop('pause');
-  }
-
-  resumeFromPause() {
-    // A paused scene misses keyup events; clear keys so movement isn't stuck.
-    this.input.keyboard!.resetKeys();
-    this.scene.resume();
   }
 
   private setupCollisions() {
@@ -122,9 +128,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  update(time: number, delta: number) {
+  update(_time: number, delta: number) {
     if (this.gameOver || this.transitioning) return;
 
+    this.clock.tick(delta);
+    const time = this.clock.now;
     this.player.move();
     for (const spec of this.player.tryShoot(time)) {
       const bolt = new Bolt(this, spec);
@@ -137,8 +145,11 @@ export class GameScene extends Phaser.Scene {
 
     const dt = delta / 1000;
     for (const bolt of [...this.bolts.getChildren()] as Bolt[]) {
-      if (bolt.expired()) bolt.burst();
-      else if (bolt.homing > 0) bolt.steerToward(this.nearest(bolt, enemies), dt);
+      if (bolt.expired()) {
+        bolt.burst();
+        continue;
+      }
+      if (bolt.homing > 0) bolt.steerToward(this.nearest(bolt, enemies), dt);
     }
 
     if (!this.room.cleared && this.enemies.countActive() === 0) this.clearRoom();
@@ -146,14 +157,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private nearest(from: Phaser.GameObjects.Components.Transform, targets: Shadow[]): Shadow | undefined {
-    let best: Shadow | undefined;
-    let bestDist = Infinity;
-    for (const t of targets) {
-      if (!t.active || !t.harmful) continue;
-      const d = Phaser.Math.Distance.Squared(from.x, from.y, t.x, t.y);
-      if (d < bestDist) [best, bestDist] = [t, d];
-    }
-    return best;
+    const dist = (t: Shadow) => Phaser.Math.Distance.Squared(from.x, from.y, t.x, t.y);
+    return targets
+      .filter((t) => t.active && t.harmful)
+      .reduce<Shadow | undefined>((best, t) => (!best || dist(t) < dist(best) ? t : best), undefined);
   }
 
   // ---------------------------------------------------------------- rooms
@@ -218,7 +225,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Small colored lintel so boss/treasure doors read at a glance. */
   private doorMarker(col: number, row: number, dir: Dir, neighbor: RoomNode) {
-    const color = neighbor.type === 'boss' ? 0xe8435a : neighbor.type === 'treasure' ? 0xffd23f : 0x6d64a0;
+    const color = DOOR_MARKER[neighbor.type];
     const horizontal = dir === 'up' || dir === 'down';
     const x = tileX(col) + DIRS[dir].dx * (TILE / 2 - 3);
     const y = tileY(row) + DIRS[dir].dy * (TILE / 2 - 3);
@@ -227,7 +234,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnEnemies(room: RoomNode) {
     if (room.type === 'boss') {
-      const boss = new Shadow(this, tileX(DOOR_COL), tileY(DOOR_ROW - 1), { ...SHADOW_BOSS, hp: SHADOW_BOSS.hp + (this.depth - 1) * 30 });
+      const boss = new Shadow(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW - 1), { ...SHADOW_BOSS, hp: SHADOW_BOSS.hp + (this.depth - 1) * 30 });
       this.enemies.add(boss);
       boss.initBody();
       this.showBanner('Colosso Sombrio');
@@ -245,7 +252,7 @@ export class GameScene extends Phaser.Scene {
 
     const count = rng.int(2, 3 + this.depth);
     for (const { col, row } of rng.shuffle(cells).slice(0, count)) {
-      const shadow = new Shadow(this, tileX(col), tileY(row), { ...SHADOW_BASIC, hp: SHADOW_BASIC.hp + (this.depth - 1) * 3 });
+      const shadow = new Shadow(this, this.clock, tileX(col), tileY(row), { ...SHADOW_BASIC, hp: SHADOW_BASIC.hp + (this.depth - 1) * 3 });
       this.enemies.add(shadow);
       shadow.initBody();
     }
@@ -258,10 +265,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkDoorExit() {
-    const { x, y } = this.player;
-    const edge = TILE * 0.5;
-    const dir: Dir | undefined =
-      x < ROOM_X + edge ? 'left' : x > ROOM_X + ROOM_W - edge ? 'right' : y < ROOM_Y + edge ? 'up' : y > ROOM_Y + ROOM_H - edge ? 'down' : undefined;
+    const dir = exitSide(this.player.x, this.player.y);
     if (!dir) return;
 
     const next = this.floor.neighbor(this.room, dir);
@@ -356,7 +360,17 @@ export class GameScene extends Phaser.Scene {
     const cx = GAME_W / 2;
     const cy = ROOM_Y + ROOM_H / 2 - 60;
     const t1 = this.add.text(cx, cy, title, { fontFamily: 'monospace', fontSize: '26px', color: COLORS.text, stroke: '#000', strokeThickness: 5 }).setOrigin(0.5).setDepth(100);
-    const t2 = this.add.text(cx, cy + 30, subtitle, { fontFamily: 'monospace', fontSize: '14px', color: '#b8b0d8', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(100);
+    const t2 = this.add.text(cx, cy + 30, subtitle, { fontFamily: 'monospace', fontSize: '14px', color: COLORS.textDim, stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(100);
     if (holdMs > 0) this.tweens.add({ targets: [t1, t2], alpha: 0, delay: holdMs, duration: 400, onComplete: () => [t1, t2].forEach((t) => t.destroy()) });
   }
+}
+
+/** Which room edge the player has walked into, if any. */
+function exitSide(x: number, y: number): Dir | undefined {
+  const edge = TILE * 0.5;
+  if (x < ROOM_X + edge) return 'left';
+  if (x > ROOM_X + ROOM_W - edge) return 'right';
+  if (y < ROOM_Y + edge) return 'up';
+  if (y > ROOM_Y + ROOM_H - edge) return 'down';
+  return undefined;
 }

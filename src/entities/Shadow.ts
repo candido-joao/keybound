@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { GameClock } from '../core/clock';
 
 export interface ShadowConfig {
   hp: number;
@@ -13,6 +14,8 @@ export const SHADOW_BOSS: ShadowConfig = { hp: 90, speed: 70, scale: 2.4, boss: 
 const SPAWN_MS = 550;
 const DASH_EVERY_MS = 2600;
 const DASH_MS = 420;
+const DASH_TELEGRAPH_MS = 380;
+const DASH_SPEED = 460;
 
 /**
  * Basic enemy. Rises out of the floor (harmless while spawning), then chases.
@@ -20,21 +23,25 @@ const DASH_MS = 420;
  */
 export class Shadow extends Phaser.Physics.Arcade.Sprite {
   hp: number;
-  readonly maxHp: number;
   readonly config: ShadowConfig;
+  private clock: GameClock;
   private activeAt: number;
   private nextDashAt: number;
+  /** Pending dash launch: the telegraph ends here, then the boss lunges at `dashTarget`. */
+  private dashLaunchAt = Infinity;
+  private dashTarget?: Phaser.GameObjects.Components.Transform;
   private dashingUntil = 0;
   private knockedUntil = 0;
   private wobbleSeed = Math.random() * 1000;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, config: ShadowConfig) {
+  constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, config: ShadowConfig) {
     super(scene, x, y, 'shadow');
     scene.add.existing(this);
     this.config = config;
-    this.hp = this.maxHp = config.hp;
-    this.activeAt = scene.time.now + SPAWN_MS;
-    this.nextDashAt = scene.time.now + SPAWN_MS + DASH_EVERY_MS;
+    this.clock = clock;
+    this.hp = config.hp;
+    this.activeAt = clock.now + SPAWN_MS;
+    this.nextDashAt = clock.now + SPAWN_MS + DASH_EVERY_MS;
     this.setDepth(5).setScale(config.scale, 0.1).setAlpha(0);
     scene.tweens.add({ targets: this, scaleY: config.scale, alpha: 1, duration: SPAWN_MS, ease: 'Back.Out' });
   }
@@ -46,7 +53,7 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
   }
 
   get harmful(): boolean {
-    return this.scene.time.now >= this.activeAt;
+    return this.clock.now >= this.activeAt;
   }
 
   chase(target: Phaser.GameObjects.Components.Transform, time: number) {
@@ -59,6 +66,7 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
     if (time < this.knockedUntil) return;
 
     if (this.config.boss) {
+      if (time >= this.dashLaunchAt) this.launchDash();
       if (time < this.dashingUntil) return;
       if (time >= this.nextDashAt) {
         this.nextDashAt = time + DASH_EVERY_MS;
@@ -75,15 +83,18 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
   }
 
   private telegraphDash(target: Phaser.GameObjects.Components.Transform, time: number) {
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, 0);
-    this.dashingUntil = time + 380 + DASH_MS;
-    this.scene.tweens.add({ targets: this, scaleX: this.config.scale * 1.15, duration: 190, yoyo: true });
-    this.scene.time.delayedCall(380, () => {
-      if (!this.active) return;
-      const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-      body.setVelocity(Math.cos(angle) * 460, Math.sin(angle) * 460);
-    });
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.dashTarget = target;
+    this.dashLaunchAt = time + DASH_TELEGRAPH_MS;
+    this.dashingUntil = time + DASH_TELEGRAPH_MS + DASH_MS;
+    this.scene.tweens.add({ targets: this, scaleX: this.config.scale * 1.15, duration: DASH_TELEGRAPH_MS / 2, yoyo: true });
+  }
+
+  private launchDash() {
+    this.dashLaunchAt = Infinity;
+    const target = this.dashTarget!;
+    const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * DASH_SPEED, Math.sin(angle) * DASH_SPEED);
   }
 
   /** Returns true when this hit killed it. */
@@ -95,7 +106,7 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
     if (!this.config.boss) {
       const angle = Phaser.Math.Angle.Between(fromX, fromY, this.x, this.y);
       (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
-      this.knockedUntil = this.scene.time.now + 110;
+      this.knockedUntil = this.clock.now + 110;
     }
     return this.hp <= 0;
   }
