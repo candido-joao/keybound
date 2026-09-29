@@ -31,7 +31,8 @@ export function setLocale(locale: Locale) {
 }
 
 export function isLocale(value: unknown): value is Locale {
-  return typeof value === 'string' && value in MESSAGES;
+  // `in` would also accept inherited names like "toString" from tampered storage.
+  return typeof value === 'string' && Object.hasOwn(MESSAGES, value);
 }
 
 /** First supported language in the player's preference list; any "es-*" maps to es, any "pt-*" to pt-BR. */
