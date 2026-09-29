@@ -32,7 +32,12 @@ export const COLORS = {
   shadowEye: 0xffd23f,
   heart: 0xe8435a,
   heartEmpty: 0x3b2530,
+  boss: 0xe8435a,
+  treasure: 0xffd23f,
+  doorMarker: 0x6d64a0,
   text: '#e9e4ff',
+  textDim: '#b8b0d8',
+  textMuted: '#9d95c4',
 } as const;
 
 // Pixel <-> tile helpers for the current room.
