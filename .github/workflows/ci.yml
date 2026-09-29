@@ -18,7 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Dependency install scripts run in this job; don't leave the token in .git/config for them.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Version comes from packageManager in package.json.
       - uses: pnpm/action-setup@v6
