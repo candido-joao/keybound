@@ -46,7 +46,10 @@ export class BootScene extends Phaser.Scene {
       // Cloak, head, spiky hair.
       g.fillStyle(0x2f3f8f).fillRoundedRect(6, 18, 20, 16, 5);
       g.fillStyle(0xf2d3b3).fillCircle(16, 13, 9);
-      g.fillStyle(0x5a3a22).fillTriangle(6, 10, 12, 0, 16, 8).fillTriangle(12, 8, 20, -1, 24, 9).fillTriangle(20, 9, 28, 3, 26, 13);
+      g.fillStyle(0x5a3a22)
+        .fillTriangle(6, 10, 12, 0, 16, 8)
+        .fillTriangle(12, 8, 20, -1, 24, 9)
+        .fillTriangle(20, 9, 28, 3, 26, 13);
       g.fillStyle(0x1b1830).fillRect(12, 13, 3, 3).fillRect(18, 13, 3, 3);
     });
 

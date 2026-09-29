@@ -1,18 +1,18 @@
 # Keybound
 
-Roguelike de ação top-down inspirado em *The Binding of Isaac*. Você empunha uma keyblade, atravessa andares gerados proceduralmente, enfrenta sombras e um colosso por andar, e acumula itens que alteram seus atributos.
+Roguelike de ação top-down inspirado em _The Binding of Isaac_. Você empunha uma keyblade, atravessa andares gerados proceduralmente, enfrenta sombras e um colosso por andar, e acumula itens que alteram seus atributos.
 
 Feito com [Phaser 4](https://phaser.io), TypeScript e Vite.
 
 ## Como jogar
 
-| Tecla | Ação |
-|---|---|
-| `W` `A` `S` `D` | Mover |
-| `↑` `↓` `←` `→` | Atirar |
-| `Tab` (segurar) | Mapa expandido |
-| `Esc` | Pausar |
-| `R` | Nova run (no pause ou após morrer) |
+| Tecla           | Ação                               |
+| --------------- | ---------------------------------- |
+| `W` `A` `S` `D` | Mover                              |
+| `↑` `↓` `←` `→` | Atirar                             |
+| `Tab` (segurar) | Mapa expandido                     |
+| `Esc`           | Pausar                             |
+| `R`             | Nova run (no pause ou após morrer) |
 
 Cada andar tem uma **sala do tesouro** e uma **sala do boss**. Os dois dão um item; derrotar o boss abre o portal para o próximo andar. Itens podem se repetir e seus efeitos acumulam.
 

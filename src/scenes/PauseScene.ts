@@ -18,13 +18,23 @@ export class PauseScene extends Phaser.Scene {
 
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.65).setOrigin(0);
     this.add.text(cx, cy - 90, 'Pausado', { ...style, fontSize: '28px', strokeThickness: 5 }).setOrigin(0.5);
-    this.add.text(cx, cy - 40, `seed ${game.seed}`, { ...style, fontSize: '15px', color: COLORS.textDim }).setOrigin(0.5);
+    this.add
+      .text(cx, cy - 40, `seed ${game.seed}`, { ...style, fontSize: '15px', color: COLORS.textDim })
+      .setOrigin(0.5);
     if (game.items.length > 0) {
       this.add
-        .text(cx, cy - 4, summarizeItems(game.items), { ...style, fontSize: '12px', color: COLORS.textMuted, align: 'center', wordWrap: { width: 560 } })
+        .text(cx, cy - 4, summarizeItems(game.items), {
+          ...style,
+          fontSize: '12px',
+          color: COLORS.textMuted,
+          align: 'center',
+          wordWrap: { width: 560 },
+        })
         .setOrigin(0.5, 0);
     }
-    this.add.text(cx, cy + 110, 'Esc continuar   ·   R nova run', { ...style, fontSize: '13px', color: COLORS.textDim }).setOrigin(0.5);
+    this.add
+      .text(cx, cy + 110, 'Esc continuar   ·   R nova run', { ...style, fontSize: '13px', color: COLORS.textDim })
+      .setOrigin(0.5);
 
     const keyboard = this.input.keyboard!;
     keyboard.once('keydown-ESC', () => this.close());
