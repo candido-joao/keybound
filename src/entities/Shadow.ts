@@ -79,7 +79,12 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
     this.dashTarget = target;
     this.dashLaunchAt = time + DASH_TELEGRAPH_MS;
     this.dashingUntil = time + DASH_TELEGRAPH_MS + DASH_MS;
-    this.scene.tweens.add({ targets: this, scaleX: this.config.scale * 1.15, duration: DASH_TELEGRAPH_MS / 2, yoyo: true });
+    this.scene.tweens.add({
+      targets: this,
+      scaleX: this.config.scale * 1.15,
+      duration: DASH_TELEGRAPH_MS / 2,
+      yoyo: true,
+    });
   }
 
   private launchDash() {
@@ -109,7 +114,15 @@ export class Shadow extends Phaser.Physics.Arcade.Sprite {
       const p = scene.add.image(this.x, this.y, 'particle').setTint(0x2a2144).setDepth(4);
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const d = 20 + Phaser.Math.FloatBetween(0, 30 * this.config.scale);
-      scene.tweens.add({ targets: p, x: this.x + Math.cos(a) * d, y: this.y + Math.sin(a) * d, alpha: 0, scale: 0.3, duration: 380, onComplete: () => p.destroy() });
+      scene.tweens.add({
+        targets: p,
+        x: this.x + Math.cos(a) * d,
+        y: this.y + Math.sin(a) * d,
+        alpha: 0,
+        scale: 0.3,
+        duration: 380,
+        onComplete: () => p.destroy(),
+      });
     }
     this.destroy();
   }

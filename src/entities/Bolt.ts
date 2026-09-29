@@ -62,7 +62,13 @@ export class Bolt extends Phaser.Physics.Arcade.Image {
 
   burst() {
     const puff = this.scene.add.image(this.x, this.y, 'bolt').setBlendMode(Phaser.BlendModes.ADD).setScale(this.scale);
-    this.scene.tweens.add({ targets: puff, scale: this.scale * 2.2, alpha: 0, duration: 160, onComplete: () => puff.destroy() });
+    this.scene.tweens.add({
+      targets: puff,
+      scale: this.scale * 2.2,
+      alpha: 0,
+      duration: 160,
+      onComplete: () => puff.destroy(),
+    });
     this.destroy();
   }
 }

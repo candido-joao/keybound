@@ -58,7 +58,13 @@ export class HudScene extends Phaser.Scene {
     this.icons = [];
     this.iconsKey = '';
     this.floorLabel = this.add
-      .text(GAME_W / 2, BIG.y - 16, '', { fontFamily: 'monospace', fontSize: '18px', color: COLORS.text, stroke: '#000', strokeThickness: 4 })
+      .text(GAME_W / 2, BIG.y - 16, '', {
+        fontFamily: 'monospace',
+        fontSize: '18px',
+        color: COLORS.text,
+        stroke: '#000',
+        strokeThickness: 4,
+      })
       .setOrigin(0.5, 1)
       .setDepth(11)
       .setVisible(false);
@@ -101,13 +107,17 @@ export class HudScene extends Phaser.Scene {
     const { cellW, cellH } = layout;
     const g = this.map.clear();
     if (expanded) g.fillStyle(0x000000, 0.5).fillRect(0, 0, GAME_W, GAME_H);
-    g.fillStyle(0x000000, expanded ? 0.75 : 0.45).fillRect(layout.x - 4, layout.y - 4, FLOOR_GRID_W * cellW + 8, FLOOR_GRID_H * cellH + 8);
+    g.fillStyle(0x000000, expanded ? 0.75 : 0.45).fillRect(
+      layout.x - 4,
+      layout.y - 4,
+      FLOOR_GRID_W * cellW + 8,
+      FLOOR_GRID_H * cellH + 8,
+    );
 
     const gap = expanded ? 4 : 2;
     for (const room of game.floor.rooms.values()) {
       // Isaac rule: visited rooms plus their direct neighbors are shown.
-      const revealed =
-        room.visited || (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
+      const revealed = room.visited || (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
       if (!revealed) continue;
 
       const x = layout.x + room.x * cellW;
@@ -136,7 +146,13 @@ export class HudScene extends Phaser.Scene {
       const y = ICONS_Y + Math.floor(i / ICONS_PER_ROW) * (ICON_SIZE + ICON_GAP) + ICON_SIZE / 2;
       this.icons.push(addItemIcon(this, x, y, item).setAlpha(0.55));
       if (n > 1) {
-        const count = this.add.text(x + ICON_SIZE / 2, y + ICON_SIZE / 2, `${n}`, { fontFamily: 'monospace', fontSize: '10px', color: COLORS.text, stroke: '#000', strokeThickness: 3 });
+        const count = this.add.text(x + ICON_SIZE / 2, y + ICON_SIZE / 2, `${n}`, {
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: COLORS.text,
+          stroke: '#000',
+          strokeThickness: 3,
+        });
         this.icons.push(count.setOrigin(1, 1).setAlpha(0.8));
       }
     });

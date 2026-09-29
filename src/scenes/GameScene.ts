@@ -1,5 +1,19 @@
 import Phaser from 'phaser';
-import { COLORS, DOOR_COL, DOOR_ROW, GAME_W, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W, ROOM_X, ROOM_Y, TILE, tileX, tileY } from '../config';
+import {
+  COLORS,
+  DOOR_COL,
+  DOOR_ROW,
+  GAME_W,
+  ROOM_COLS,
+  ROOM_H,
+  ROOM_ROWS,
+  ROOM_W,
+  ROOM_X,
+  ROOM_Y,
+  TILE,
+  tileX,
+  tileY,
+} from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { BASE_STATS, bossForDepth, enemiesPerRoom, shadowForDepth } from '../combat/balance';
 import { computeStats, type Item } from '../combat/stats';
@@ -362,9 +376,34 @@ export class GameScene extends Phaser.Scene {
   private showBanner(title: string, subtitle = '', holdMs = 1400) {
     const cx = GAME_W / 2;
     const cy = ROOM_Y + ROOM_H / 2 - 60;
-    const t1 = this.add.text(cx, cy, title, { fontFamily: 'monospace', fontSize: '26px', color: COLORS.text, stroke: '#000', strokeThickness: 5 }).setOrigin(0.5).setDepth(100);
-    const t2 = this.add.text(cx, cy + 30, subtitle, { fontFamily: 'monospace', fontSize: '14px', color: COLORS.textDim, stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setDepth(100);
-    if (holdMs > 0) this.tweens.add({ targets: [t1, t2], alpha: 0, delay: holdMs, duration: 400, onComplete: () => [t1, t2].forEach((t) => t.destroy()) });
+    const t1 = this.add
+      .text(cx, cy, title, {
+        fontFamily: 'monospace',
+        fontSize: '26px',
+        color: COLORS.text,
+        stroke: '#000',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(100);
+    const t2 = this.add
+      .text(cx, cy + 30, subtitle, {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        color: COLORS.textDim,
+        stroke: '#000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(100);
+    if (holdMs > 0)
+      this.tweens.add({
+        targets: [t1, t2],
+        alpha: 0,
+        delay: holdMs,
+        duration: 400,
+        onComplete: () => [t1, t2].forEach((t) => t.destroy()),
+      });
   }
 }
 
