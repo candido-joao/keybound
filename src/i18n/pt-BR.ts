@@ -37,7 +37,7 @@ export const ptBR = {
   'item.long-focus.name': 'Foco Distante',
   'item.long-focus.description': 'Alcance +40%, projéteis maiores',
   'item.vital-shard.name': 'Fragmento Vital',
-  'item.vital-shard.description': '+1 coração',
+  'item.vital-shard.description': 'HP máximo +20',
 } as const;
 
 export type MessageKey = keyof typeof ptBR;

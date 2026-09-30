@@ -11,7 +11,7 @@ export interface PlayerStats {
   shotSpeed: number;
   /** Distance a bolt travels before fading, px. */
   range: number;
-  /** In half-hearts. */
+  /** Hit points. */
   maxHealth: number;
   /** Bolts per shot, fanned out by `spread`. */
   shotCount: number;

@@ -6,7 +6,7 @@ export const BASE_STATS: PlayerStats = {
   fireDelay: 1040,
   shotSpeed: 360,
   range: 200,
-  maxHealth: 6,
+  maxHealth: 60,
   shotCount: 1,
   spread: 0,
   homing: 0,
@@ -23,6 +23,9 @@ export const STAT_LIMITS = {
 } as const;
 
 export const PLAYER_INVULN_MS = 650;
+
+/** HP lost on contact with any enemy, boss included. */
+export const CONTACT_DAMAGE = 10;
 
 export interface ShadowConfig {
   hp: number;

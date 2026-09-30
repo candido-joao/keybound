@@ -15,7 +15,7 @@ import {
   tileY,
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
-import { BASE_STATS, bossForDepth, enemiesPerRoom, shadowForDepth } from '../combat/balance';
+import { BASE_STATS, CONTACT_DAMAGE, bossForDepth, enemiesPerRoom, shadowForDepth } from '../combat/balance';
 import { computeStats, type Item } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
@@ -147,7 +147,7 @@ export class GameScene extends Phaser.Scene {
 
     p.add.overlap(this.player, this.enemies, (_, e) => {
       const enemy = e as Shadow;
-      if (enemy.harmful && this.player.hurt(1) && this.player.health <= 0) this.onDeath();
+      if (enemy.harmful && this.player.hurt(CONTACT_DAMAGE) && this.player.health <= 0) this.onDeath();
     });
   }
 

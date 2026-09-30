@@ -5,7 +5,14 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 /** Pure game logic: must stay testable without a browser or Phaser. */
-const PURE_LOGIC = ['src/combat/balance.ts', 'src/combat/stats.ts', 'src/core/**', 'src/floor/**', 'src/i18n/**'];
+const PURE_LOGIC = [
+  'src/combat/balance.ts',
+  'src/combat/stats.ts',
+  'src/core/**',
+  'src/floor/**',
+  'src/i18n/**',
+  'src/ui/healthTrail.ts',
+];
 
 export default defineConfig(
   { ignores: ['dist'] },
