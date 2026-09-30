@@ -38,5 +38,5 @@ export const es = {
   'item.long-focus.name': 'Foco Lejano',
   'item.long-focus.description': 'Alcance +40%, proyectiles más grandes',
   'item.vital-shard.name': 'Fragmento Vital',
-  'item.vital-shard.description': '+1 corazón',
+  'item.vital-shard.description': 'PV máximos +20',
 } satisfies Messages;

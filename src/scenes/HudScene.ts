@@ -4,6 +4,8 @@ import { type Item, countItems } from '../combat/stats';
 import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_W, ROOM_X } from '../config';
 import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
 import { type Locale, getLocale, t } from '../i18n';
+import { HealthTrail } from '../ui/healthTrail';
+import { PORTRAIT_KEYHOLE, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
 import type { GameScene } from './GameScene';
 
 interface MapLayout {
@@ -39,10 +41,27 @@ const ROOM_RIGHT = ROOM_X + ROOM_W;
 const ICONS_X = ROOM_RIGHT + (GAME_W - ROOM_RIGHT - (ICONS_PER_ROW * (ICON_SIZE + ICON_GAP) - ICON_GAP)) / 2;
 const ICONS_Y = MINI.y + FLOOR_GRID_H * MINI.cellH + 14;
 
+// HP gauge at the top-left traces the keyhole portrait frame and runs out of its base
+// as a straight bar. HP fills from the gauge's start, so damage eats the bar first.
+// Drawn on a 2D canvas: pixelArt turns off antialiasing for Graphics, and curves need it.
+const GAUGE_X = 40;
+const GAUGE_Y = 36;
+const HP_THICKNESS = 6;
+const HP_BAR_LENGTH = 400;
+/** Base HP (60) reaches about the head's lower left; more max HP goes on down the stem. */
+const HP_PX_PER_HP = 1.75;
+const GAUGE_OUTLINE = keyholeOutline(PORTRAIT_KEYHOLE, 4 + HP_THICKNESS / 2);
+const GAUGE_LENGTH = gaugeLength(GAUGE_OUTLINE, HP_BAR_LENGTH);
+const GAUGE_TEXTURE_W = GAUGE_X + HP_BAR_LENGTH + 40;
+const GAUGE_TEXTURE_H = GAUGE_Y + PORTRAIT_KEYHOLE.stemBottom + 20;
+
 /** Runs on top of GameScene and reads its state every frame. */
 export class HudScene extends Phaser.Scene {
   private map!: Phaser.GameObjects.Graphics;
-  private hearts: { back: Phaser.GameObjects.Image; front: Phaser.GameObjects.Image }[] = [];
+  private gauge!: Phaser.Textures.CanvasTexture;
+  private trail = new HealthTrail();
+  private drawnHealth = -1;
+  private drawnMaxHealth = -1;
   private icons: Phaser.GameObjects.GameObject[] = [];
   private iconsKey = '';
   private floorLabel!: Phaser.GameObjects.Text;
@@ -55,9 +74,9 @@ export class HudScene extends Phaser.Scene {
   }
 
   create() {
-    // Above hearts and icons, so the expanded map's backdrop dims them too.
+    this.createHealthBar();
+    // Above the HP bar and icons, so the expanded map's backdrop dims them too.
     this.map = this.add.graphics().setDepth(10);
-    this.hearts = [];
     this.icons = [];
     this.iconsKey = '';
     this.labelDepth = 0;
@@ -77,12 +96,12 @@ export class HudScene extends Phaser.Scene {
     this.tab = this.input.keyboard!.addKey('TAB');
   }
 
-  update() {
+  update(_time: number, delta: number) {
     const game = this.scene.get('game') as GameScene;
     if (!game.player?.active) return;
 
     const expanded = this.tab.isDown && !game.scene.isPaused();
-    this.drawHearts(game.player.health, game.player.stats.maxHealth);
+    this.drawHealthBar(game.player.health, game.player.stats.maxHealth, delta);
     this.drawMinimap(game, expanded ? BIG : MINI, expanded);
     this.floorLabel.setVisible(expanded);
     this.updateFloorLabel(game.depth);
@@ -97,24 +116,52 @@ export class HudScene extends Phaser.Scene {
     this.floorLabel.setText(t('floor.label', { n: depth }));
   }
 
-  private drawHearts(health: number, maxHealth: number) {
-    const count = Math.ceil(maxHealth / 2);
-    while (this.hearts.length < count) {
-      const x = 16 + this.hearts.length * 22;
-      const back = this.add.image(x, 14, 'heart').setOrigin(0).setTint(COLORS.heartEmpty);
-      const front = this.add.image(x, 14, 'heart').setOrigin(0).setTint(COLORS.heart);
-      this.hearts.push({ back, front });
-    }
-    while (this.hearts.length > count) {
-      const { back, front } = this.hearts.pop()!;
-      back.destroy();
-      front.destroy();
-    }
+  private createHealthBar() {
+    this.gauge = this.textures.exists('hp-gauge')
+      ? (this.textures.get('hp-gauge') as Phaser.Textures.CanvasTexture)
+      : this.textures.createCanvas('hp-gauge', GAUGE_TEXTURE_W, GAUGE_TEXTURE_H)!;
+    this.add.image(0, 0, 'hp-gauge').setOrigin(0);
+    // Pivot on the keyhole's round head, which BootScene draws 2px below the top.
+    const frame = this.add.image(GAUGE_X, GAUGE_Y, 'portrait-frame');
+    frame.setOrigin(0.5, (PORTRAIT_KEYHOLE.headRadius + 2) / frame.height);
+    // Head and hair of the player sprite, centered in the keyhole's head.
+    this.add
+      .image(GAUGE_X, GAUGE_Y + 7, 'player')
+      .setCrop(5, 0, 23, 23)
+      .setScale(1.3);
+    this.drawnHealth = -1;
+    this.drawnMaxHealth = -1;
+  }
 
-    this.hearts.forEach(({ front }, i) => {
-      const fill = Phaser.Math.Clamp(health - i * 2, 0, 2);
-      front.setVisible(fill > 0).setCrop(0, 0, fill === 1 ? 9 : 18, 16);
-    });
+  /** Redraws only when health, max health or the damage trail changed. */
+  private drawHealthBar(health: number, maxHealth: number, delta: number) {
+    if (this.drawnHealth < 0) this.trail.reset(health);
+    const trailMoved = this.trail.update(health, delta);
+    if (!trailMoved && health === this.drawnHealth && maxHealth === this.drawnMaxHealth) return;
+
+    const length = Math.min(GAUGE_LENGTH, maxHealth * HP_PX_PER_HP);
+    const toLength = (hp: number) => (length * hp) / maxHealth;
+    this.gauge.context.clearRect(0, 0, GAUGE_TEXTURE_W, GAUGE_TEXTURE_H);
+    this.strokeGauge(0x000000, HP_THICKNESS + 3, length);
+    this.strokeGauge(COLORS.hpBack, HP_THICKNESS, length);
+    this.strokeGauge(COLORS.hpTrail, HP_THICKNESS, toLength(this.trail.value));
+    this.strokeGauge(COLORS.hp, HP_THICKNESS, toLength(health));
+    this.gauge.refresh();
+    this.drawnHealth = health;
+    this.drawnMaxHealth = maxHealth;
+  }
+
+  /** Strokes the first `length` px of the gauge, as one dash followed by a gap past its end. */
+  private strokeGauge(color: number, width: number, length: number) {
+    if (length <= 0) return;
+    const ctx = this.gauge.context;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = width;
+    ctx.strokeStyle = cssColor(color);
+    ctx.setLineDash([length, GAUGE_LENGTH + width]);
+    traceGauge(ctx, GAUGE_OUTLINE, GAUGE_X, GAUGE_Y, HP_BAR_LENGTH);
+    ctx.stroke();
   }
 
   private drawMinimap(game: GameScene, layout: MapLayout, expanded: boolean) {

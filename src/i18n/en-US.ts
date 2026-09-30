@@ -38,5 +38,5 @@ export const enUS = {
   'item.long-focus.name': 'Long Focus',
   'item.long-focus.description': 'Range +40%, bigger bolts',
   'item.vital-shard.name': 'Vital Shard',
-  'item.vital-shard.description': '+1 heart',
+  'item.vital-shard.description': 'Max HP +20',
 } satisfies Messages;

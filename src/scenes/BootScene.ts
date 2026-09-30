@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, TILE } from '../config';
+import { PORTRAIT_KEYHOLE, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
 
 /**
@@ -95,12 +96,30 @@ export class BootScene extends Phaser.Scene {
       g.lineStyle(2, 0xc77dff).strokeCircle(28, 28, 16);
     });
 
-    bake('heart', 18, 16, () => {
-      g.fillStyle(0xffffff).fillCircle(5, 5, 5).fillCircle(13, 5, 5).fillTriangle(0, 7, 18, 7, 9, 16);
-    });
+    this.bakePortraitFrame();
 
     g.destroy();
     this.launch();
+  }
+
+  /**
+   * Keyhole behind the HUD portrait, drawn on a 2D canvas so its curves stay antialiased
+   * (pixelArt turns that off for Graphics). The HUD's HP gauge traces the same outline.
+   */
+  private bakePortraitFrame() {
+    const { headRadius, stemBottom } = PORTRAIT_KEYHOLE;
+    const cx = headRadius + 2;
+    const cy = headRadius + 2;
+    const texture = this.textures.createCanvas('portrait-frame', cx * 2, cy + stemBottom + 2)!;
+    const ctx = texture.context;
+    traceKeyhole(ctx, keyholeOutline(PORTRAIT_KEYHOLE, 0), cx, cy);
+    ctx.fillStyle = cssColor(COLORS.hpBack);
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = cssColor(COLORS.hpFrame);
+    ctx.stroke();
+    texture.refresh();
   }
 
   /** URL params jump straight into a run, skipping the title. */

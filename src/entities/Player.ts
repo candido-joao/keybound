@@ -45,9 +45,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   /** Returns true if the hit landed (not during i-frames). */
-  hurt(halfHearts: number): boolean {
+  hurt(amount: number): boolean {
     if (this.invulnerable || this.health <= 0) return false;
-    this.health = Math.max(0, this.health - halfHearts);
+    this.health = Math.max(0, this.health - amount);
     this.invulnUntil = this.clock.now + PLAYER_INVULN_MS;
     this.scene.cameras.main.shake(120, 0.006);
     return true;

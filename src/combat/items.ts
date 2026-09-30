@@ -59,6 +59,6 @@ export const ITEMS: readonly Item[] = [
     name: 'item.vital-shard.name',
     description: 'item.vital-shard.description',
     color: 0xe8435a,
-    apply: (s) => ({ ...s, maxHealth: s.maxHealth + 2 }),
+    apply: (s) => ({ ...s, maxHealth: s.maxHealth + 20 }),
   },
 ];
