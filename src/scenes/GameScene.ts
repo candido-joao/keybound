@@ -16,11 +16,12 @@ import {
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
-import { type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
-import { computeStats, type Item } from '../combat/stats';
+import { ENEMIES, type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
+import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
-import { type RunData, type RunStats, newRun } from '../core/run';
+import { type RunCheats, type RunData, type RunStats, newRun } from '../core/run';
+import type { DebugTarget } from '../debug/commands';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
@@ -57,6 +58,12 @@ export class GameScene extends Phaser.Scene {
   private roomsCleared = 0;
   /** Gameplay time of earlier floors; this floor's is on the clock. */
   private pastTimeMs = 0;
+  /** Debug console changes; they follow the run to the next floor. */
+  private cheats: RunCheats = { god: false, stats: {} };
+  /** Set by the console's reveal; lasts for this floor only. */
+  mapRevealed = false;
+  /** Gives each console spawn its own Rng stream. */
+  private debugSpawns = 0;
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
@@ -80,6 +87,9 @@ export class GameScene extends Phaser.Scene {
     this.kills = data.stats.kills;
     this.roomsCleared = data.stats.roomsCleared;
     this.pastTimeMs = data.stats.timeMs;
+    this.cheats = { god: data.cheats?.god ?? false, stats: { ...data.cheats?.stats } };
+    this.mapRevealed = false;
+    this.debugSpawns = 0;
     this.transitioning = false;
     this.gameOver = false;
     this.roomDecor = [];
@@ -108,7 +118,7 @@ export class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group();
     this.bolts = this.physics.add.group();
 
-    const stats = computeStats(BASE_STATS, this.items);
+    const stats = this.currentStats();
     this.player = new Player(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW), stats);
     if (data.health !== undefined) this.player.health = Math.min(stats.maxHealth, data.health);
 
@@ -122,8 +132,13 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-ESC', () => this.pause());
   }
 
+  /** False mid room change or after death, when overlays must not open. */
+  get canPause(): boolean {
+    return !this.transitioning && !this.gameOver;
+  }
+
   private pause() {
-    if (this.transitioning || this.gameOver) return;
+    if (!this.canPause) return;
     this.scene.pause();
     this.scene.launch('pause');
     this.scene.bringToTop('pause');
@@ -148,6 +163,7 @@ export class GameScene extends Phaser.Scene {
 
     p.add.overlap(this.player, this.enemies, (_, e) => {
       const enemy = e as Enemy;
+      if (this.cheats.god) return;
       if (enemy.harmful && this.player.hurt(enemy.def.contactDamage) && this.player.health <= 0) this.onDeath();
     });
   }
@@ -265,6 +281,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     const rng = new Rng(`${this.seed}:room:${this.depth}:${room.x},${room.y}`);
+    const { min, max } = enemiesPerRoom(this.depth);
+    this.spawnPack(enemyForDepth(SHADOW, this.depth), rng.int(min, max), rng);
+  }
+
+  /** `count` enemies on shuffled floor tiles away from the player; more than fit wrap around. */
+  private spawnPack(def: EnemyDef, count: number, rng: Rng) {
+    const cells = rng.shuffle(this.cellsAwayFromPlayer());
+    for (let i = 0; i < count; i++) {
+      const { col, row } = cells[i % cells.length];
+      this.spawnEnemy(def, tileX(col), tileY(row), rng.next() * 1000);
+    }
+  }
+
+  private cellsAwayFromPlayer(): { col: number; row: number }[] {
     const cells: { col: number; row: number }[] = [];
     for (let row = 1; row < ROOM_ROWS - 1; row++) {
       for (let col = 1; col < ROOM_COLS - 1; col++) {
@@ -272,13 +302,7 @@ export class GameScene extends Phaser.Scene {
         if (far) cells.push({ col, row });
       }
     }
-
-    const { min, max } = enemiesPerRoom(this.depth);
-    const count = rng.int(min, max);
-    const def = enemyForDepth(SHADOW, this.depth);
-    for (const { col, row } of rng.shuffle(cells).slice(0, count)) {
-      this.spawnEnemy(def, tileX(col), tileY(row), rng.next() * 1000);
-    }
+    return cells;
   }
 
   private spawnEnemy(def: EnemyDef, x: number, y: number, wobbleSeed = 0) {
@@ -316,7 +340,12 @@ export class GameScene extends Phaser.Scene {
   private spawnItem(room: RoomNode, row: number) {
     const item = this.roomItems.get(room);
     if (!item) return;
-    const x = tileX(DOOR_COL);
+    this.placePedestal(DOOR_COL, row, item, () => (room.itemTaken = true));
+  }
+
+  /** Pedestal holding `item` on a room tile; `onTake` runs once, when the player grabs it. */
+  private placePedestal(col: number, row: number, item: Item, onTake?: () => void) {
+    const x = tileX(col);
     const y = tileY(row);
 
     const pedestal = this.add.image(x, y + 10, 'pedestal').setDepth(3);
@@ -327,7 +356,7 @@ export class GameScene extends Phaser.Scene {
 
     const pickup = this.physics.add.overlap(this.player, pedestal, () => {
       pickup.active = false;
-      room.itemTaken = true;
+      onTake?.();
       orb.destroy();
       this.grantItem(item);
     });
@@ -336,8 +365,12 @@ export class GameScene extends Phaser.Scene {
 
   private grantItem(item: Item) {
     this.items.push(item);
-    this.player.setStats(computeStats(BASE_STATS, this.items));
+    this.player.setStats(this.currentStats());
     this.showBanner(t(item.name), t(item.description));
+  }
+
+  private currentStats(): PlayerStats {
+    return { ...computeStats(BASE_STATS, this.items), ...this.cheats.stats };
   }
 
   private spawnPortal() {
@@ -364,15 +397,21 @@ export class GameScene extends Phaser.Scene {
     this.transitioning = true;
     this.cameras.main.fadeOut(400, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.restart({
-        seed: this.seed,
-        seeded: this.seeded,
-        depth: this.depth + 1,
-        itemIds: this.items.map((i) => i.id),
-        health: this.player.health,
-        stats: this.runStats(),
-      } satisfies RunData);
+      this.scene.restart(this.carryOver(this.depth + 1));
     });
+  }
+
+  /** The run as it enters floor `depth`. */
+  private carryOver(depth: number): RunData {
+    return {
+      seed: this.seed,
+      seeded: this.seeded,
+      depth,
+      itemIds: this.items.map((i) => i.id),
+      health: this.player.health,
+      stats: this.runStats(),
+      cheats: this.cheats,
+    };
   }
 
   runStats(): RunStats {
@@ -382,6 +421,84 @@ export class GameScene extends Phaser.Scene {
   /** Replays or rolls a fresh run in place; the HUD keeps running. */
   restartRun(sameSeed: boolean) {
     this.scene.restart(newRun(sameSeed ? this.seed : undefined));
+  }
+
+  // ---------------------------------------------------------------- debug console
+
+  /** What the debug console can change. Commands run while this scene is paused under the console. */
+  debugTarget(): DebugTarget {
+    const scene = this.scene;
+    return {
+      depth: () => this.depth,
+      health: () => this.player.health,
+      maxHealth: () => this.player.stats.maxHealth,
+      god: () => this.cheats.god,
+      markSeeded: () => {
+        this.seeded = true;
+      },
+      give: (itemId, count) => this.debugGive(itemId, count),
+      take: (itemId) => this.debugTake(itemId),
+      placeItem: (itemId) => this.debugPedestal(itemId),
+      setHealth: (hp) => {
+        this.player.health = Math.min(hp, this.player.stats.maxHealth);
+      },
+      setGod: (on) => {
+        this.cheats.god = on;
+      },
+      setStat: (name, value) => {
+        this.cheats.stats[name] = value;
+        this.player.setStats(this.currentStats());
+      },
+      spawn: (enemyId, count) => this.debugSpawn(enemyId, count),
+      spawnBoss: () => this.debugSpawn(SHADOW_COLOSSUS.id, 1),
+      killAll: () => this.debugKillAll(),
+      goToFloor: (depth) => scene.restart(this.carryOver(depth)),
+      revealMap: () => {
+        this.mapRevealed = true;
+      },
+    };
+  }
+
+  private debugGive(itemId: string, count: number) {
+    const item = ITEMS.find((i) => i.id === itemId);
+    if (!item) return;
+    for (let i = 0; i < count; i++) this.items.push(item);
+    this.player.setStats(this.currentStats());
+  }
+
+  private debugTake(itemId: string): boolean {
+    const index = this.items.findLastIndex((i) => i.id === itemId);
+    if (index < 0) return false;
+    this.items.splice(index, 1);
+    this.player.setStats(this.currentStats());
+    return true;
+  }
+
+  /** Two tiles above the player, or below when that would be in the wall; never on the player, or it'd be taken at once. */
+  private debugPedestal(itemId: string) {
+    const item = ITEMS.find((i) => i.id === itemId);
+    if (!item) return;
+    const col = Phaser.Math.Clamp(Math.floor((this.player.x - ROOM_X) / TILE), 1, ROOM_COLS - 2);
+    const row = Math.floor((this.player.y - ROOM_Y) / TILE);
+    this.placePedestal(col, row - 2 >= 1 ? row - 2 : row + 2, item);
+  }
+
+  private debugSpawn(enemyId: string, count: number) {
+    const def = ENEMIES.find((e) => e.id === enemyId);
+    if (!def) return;
+    const rng = new Rng(`${this.seed}:debug:${this.depth}:${this.debugSpawns++}`);
+    this.spawnPack(enemyForDepth(def, this.depth), count, rng);
+  }
+
+  private debugKillAll(): number {
+    let killed = 0;
+    for (const enemy of [...this.enemies.getChildren()] as Enemy[]) {
+      if (!enemy.active) continue;
+      enemy.die();
+      killed++;
+    }
+    this.kills += killed;
+    return killed;
   }
 
   // ---------------------------------------------------------------- feedback

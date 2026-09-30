@@ -190,7 +190,10 @@ export class HudScene extends Phaser.Scene {
     const gap = expanded ? 4 : 2;
     for (const room of game.floor.rooms.values()) {
       // Isaac rule: visited rooms plus their direct neighbors are shown.
-      const revealed = room.visited || (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
+      const revealed =
+        game.mapRevealed ||
+        room.visited ||
+        (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
       if (!revealed) continue;
 
       const x = layout.x + room.x * cellW;
