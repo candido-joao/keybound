@@ -2,6 +2,7 @@
 export const ptBR = {
   'floor.label': 'Andar {n}',
   'enemy.shadow': 'Sombra',
+  'enemy.shadow-caster': 'Sombra Conjuradora',
   'boss.shadow-colossus': 'Colosso Sombrio',
   'boss-intro.skip': 'Enter pular',
   'death.title': 'Engolido pelas sombras',

@@ -3,6 +3,7 @@ import type { Messages } from './pt-BR';
 export const enUS = {
   'floor.label': 'Floor {n}',
   'enemy.shadow': 'Shadow',
+  'enemy.shadow-caster': 'Shadow Caster',
   'boss.shadow-colossus': 'Shadow Colossus',
   'boss-intro.skip': 'Enter to skip',
   'death.title': 'Swallowed by the shadows',

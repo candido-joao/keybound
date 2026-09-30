@@ -1,4 +1,6 @@
+import type { Rng } from '../core/rng';
 import type { MessageKey } from '../i18n';
+import { pickWeighted } from './itemPool';
 
 /** Stops, swells for `telegraphMs`, then lunges at where the player stood when the telegraph began. */
 export interface DashAttack {
@@ -8,9 +10,30 @@ export interface DashAttack {
   telegraphMs: number;
   durationMs: number;
   speed: number;
+  /** Only dashes at a target this close; farther off, the dash waits and the volley takes over. */
+  maxDistance?: number;
 }
 
-export type EnemyAttack = DashAttack;
+/**
+ * Punishes keeping away: once the player has stayed beyond `minDistance` for `farMs` straight,
+ * the enemy stops with glowing eyes for `telegraphMs`, then fires a fan of slow orbs.
+ */
+export interface VolleyAttack {
+  kind: 'volley';
+  minDistance: number;
+  farMs: number;
+  /** 0 fires on the move, with no stop and no eye glow. */
+  telegraphMs: number;
+  /** Measured from the shot. */
+  cooldownMs: number;
+  count: number;
+  /** Total fan angle in degrees. */
+  spreadDeg: number;
+  speed: number;
+  damage: number;
+}
+
+export type EnemyAttack = DashAttack | VolleyAttack;
 
 /**
  * A harder second phase. Past the HP threshold the enemy turns invulnerable for the
@@ -69,6 +92,37 @@ export const SHADOW: EnemyDef = {
   deathColor: 0x2a2144,
 };
 
+/** Keeps back and shoots single orbs; slower and frailer than a plain shadow. */
+export const SHADOW_CASTER: EnemyDef = {
+  id: 'shadow-caster',
+  name: 'enemy.shadow-caster',
+  texture: 'shadow-caster',
+  hp: 9,
+  hpGrowth: 0.15,
+  speed: 70,
+  scale: 1,
+  contactDamage: 10,
+  boss: false,
+  attacks: [
+    {
+      kind: 'volley',
+      minDistance: 120,
+      farMs: 1200,
+      // No tell: the player has to keep an eye on it.
+      telegraphMs: 0,
+      cooldownMs: 2600,
+      count: 1,
+      spreadDeg: 0,
+      speed: 150,
+      damage: 10,
+    },
+  ],
+  deathColor: 0x3a1f4a,
+};
+
+/** The Colossus dashes at players within this distance and shoots at those beyond it. */
+const COLOSSUS_REACH = 260;
+
 export const SHADOW_COLOSSUS: EnemyDef = {
   id: 'shadow-colossus',
   name: 'boss.shadow-colossus',
@@ -79,7 +133,20 @@ export const SHADOW_COLOSSUS: EnemyDef = {
   scale: 2.4,
   contactDamage: 10,
   boss: true,
-  attacks: [{ kind: 'dash', everyMs: 2000, telegraphMs: 380, durationMs: 420, speed: 460 }],
+  attacks: [
+    { kind: 'dash', everyMs: 2000, telegraphMs: 380, durationMs: 420, speed: 460, maxDistance: COLOSSUS_REACH },
+    {
+      kind: 'volley',
+      minDistance: COLOSSUS_REACH,
+      farMs: 700,
+      telegraphMs: 500,
+      cooldownMs: 3000,
+      count: 3,
+      spreadDeg: 36,
+      speed: 170,
+      damage: 10,
+    },
+  ],
   fury: {
     hpShare: 0.4,
     transitionMs: 600,
@@ -90,7 +157,32 @@ export const SHADOW_COLOSSUS: EnemyDef = {
   deathColor: 0x2a2144,
 };
 
-export const ENEMIES: readonly EnemyDef[] = [SHADOW, SHADOW_COLOSSUS];
+export const ENEMIES: readonly EnemyDef[] = [SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS];
+
+/** Who can fill a normal room, how often, and from which floor on. */
+export interface RoomEnemy {
+  def: EnemyDef;
+  weight: number;
+  minDepth: number;
+}
+
+export const ROOM_ENEMIES: readonly RoomEnemy[] = [
+  { def: SHADOW, weight: 3, minDepth: 1 },
+  // Floor 1 stays melee only while the player learns to move and shoot.
+  { def: SHADOW_CASTER, weight: 1, minDepth: 2 },
+];
+
+/** `count` enemy kinds for a room on floor `depth`, each rolled by weight among those allowed there. */
+export function rollRoomEnemies(
+  rng: Rng,
+  depth: number,
+  count: number,
+  table: readonly RoomEnemy[] = ROOM_ENEMIES,
+): EnemyDef[] {
+  const allowed = table.filter((e) => depth >= e.minDepth);
+  if (allowed.length === 0) return [];
+  return Array.from({ length: count }, () => pickWeighted(rng, allowed).def);
+}
 
 /** Floor 1 uses the base HP; each floor after adds a fixed share of it. */
 export function enemyForDepth(def: EnemyDef, depth: number): EnemyDef {

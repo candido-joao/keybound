@@ -3,6 +3,7 @@ import type { Messages } from './pt-BR';
 export const es = {
   'floor.label': 'Piso {n}',
   'enemy.shadow': 'Sombra',
+  'enemy.shadow-caster': 'Sombra Conjuradora',
   'boss.shadow-colossus': 'Coloso Sombrío',
   'boss-intro.skip': 'Enter para saltar',
   'death.title': 'Devorado por las sombras',
