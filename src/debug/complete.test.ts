@@ -5,7 +5,7 @@ import { commonPrefix, complete } from './complete';
 const CATALOG: Catalog = {
   item: ['swift-boots', 'seeker-rune', 'quickcast'],
   enemy: ['shadow', 'shadow-colossus'],
-  stat: ['speed', 'spread'],
+  stat: ['speed', 'spread', 'maxHealth'],
 };
 
 describe('complete', () => {
@@ -43,6 +43,10 @@ describe('complete', () => {
 
   it('completes stat names', () => {
     expect(complete('stat spr', CATALOG).completed).toBe('stat spread ');
+  });
+
+  it('completes camelCase stat names from lowercase input', () => {
+    expect(complete('stat maxh', CATALOG).completed).toBe('stat maxHealth ');
   });
 
   it('matches regardless of case and keeps what was typed before the word', () => {

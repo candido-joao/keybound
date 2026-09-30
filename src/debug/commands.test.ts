@@ -121,6 +121,12 @@ describe('execute', () => {
     expect(state.stats.speed).toBe(212.5);
   });
 
+  it('finds camelCase stats typed in any case', () => {
+    const { state, target } = fakeTarget();
+    expect(execute('stat maxhealth 80', target, CATALOG).lines).toEqual(['maxHealth = 80']);
+    expect(state.stats.maxHealth).toBe(80);
+  });
+
   it('toggles god mode', () => {
     const { target } = fakeTarget();
     expect(execute('god', target, CATALOG).lines).toEqual(['god mode on']);

@@ -135,6 +135,8 @@ export class DebugConsole {
     this.open = false;
     this.root.hidden = true;
     this.input.blur();
+    // Keys released while typing never reached Phaser, which would still hold them down.
+    (this.game.scene.getScene('game') as GameScene | null)?.input.keyboard?.resetKeys();
     if (this.game.scene.isPaused('game')) this.game.scene.resume('game');
   }
 

@@ -281,7 +281,8 @@ export function parseArgs(command: Command, words: readonly string[], catalog: C
 
 function parseArg(arg: ArgSpec, word: string, catalog: Catalog): ArgValue | undefined {
   if (arg.kind === 'int' || arg.kind === 'number') return parseNumber(arg, word);
-  return (catalog[arg.kind] as readonly string[]).includes(word) ? word : undefined;
+  // Words arrive lowercased; ids like maxHealth keep their catalog casing.
+  return (catalog[arg.kind] as readonly string[]).find((id) => id.toLowerCase() === word);
 }
 
 function parseNumber(arg: ArgSpec, word: string): number | undefined {

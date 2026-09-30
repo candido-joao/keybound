@@ -38,8 +38,13 @@ window.addEventListener('keydown', (event) => {
 
 // Off by default, in production too; ?console turns it on and the choice is saved.
 const consoleParam = parseConsoleParam(location.search);
-if (consoleParam !== undefined) saveSettings({ ...loadSettings(), console: consoleParam });
-if (loadSettings().console) new DebugConsole(game);
+const settings = loadSettings();
+if (consoleParam !== undefined) {
+  settings.console = consoleParam;
+  saveSettings(settings);
+}
+// Decides from memory, not a reload: a failed save must not undo ?console for this session.
+if (settings.console) new DebugConsole(game);
 
 // Dev-only handle for debugging from the browser console.
 if (import.meta.env.DEV) Object.assign(window, { game });

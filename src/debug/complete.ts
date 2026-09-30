@@ -35,7 +35,7 @@ function candidatesFor(arg: ArgSpec, catalog: Catalog): string[] {
 
 /** While the word is empty the ghost shows `pending`, the arguments still missing, instead of a guess. */
 function completeWord(head: string, word: string, candidates: string[], pending: string): Completion {
-  const matches = candidates.filter((c) => c.startsWith(word));
+  const matches = candidates.filter((c) => c.toLowerCase().startsWith(word));
   const ghost = word ? (matches[0]?.slice(word.length) ?? '') : pending;
   if (matches.length === 0) return { completed: head + word, ghost, matches: [] };
 
