@@ -12,6 +12,7 @@ const PURE_LOGIC = [
   'src/combat/itemPool.ts',
   'src/combat/ricochet.ts',
   'src/combat/stats.ts',
+  'src/combat/volley.ts',
   'src/core/**',
   'src/debug/commands.ts',
   'src/debug/complete.ts',

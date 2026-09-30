@@ -76,6 +76,14 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(COLORS.shadowEye).fillCircle(11, 17, 3.2).fillCircle(21, 17, 3.2);
     });
 
+    // Same eye spots as the plain shadow, so the eye glow lines up; hood and pink eyes mark it as a shooter.
+    bake('shadow-caster', 32, 32, () => {
+      g.fillStyle(0x3b2358).fillEllipse(16, 20, 24, 22);
+      g.fillStyle(0x3b2358).fillTriangle(5, 16, 16, -1, 27, 16);
+      g.fillStyle(0x5c3a82).fillTriangle(9, 14, 16, 3, 23, 14);
+      g.fillStyle(0xff5fa2).fillCircle(11, 17, 3).fillCircle(21, 17, 3);
+    });
+
     bake('particle', 8, 8, () => {
       g.fillStyle(0xffffff).fillCircle(4, 4, 4);
     });
@@ -89,6 +97,13 @@ export class BootScene extends Phaser.Scene {
     bake('item', 24, 24, () => {
       g.fillStyle(0xffffff).fillCircle(12, 12, 10);
       g.fillStyle(0xffffff, 0.4).fillCircle(12, 12, 12);
+    });
+
+    // Warm and dark, unlike the player's cyan bolts, so incoming shots read at a glance.
+    bake('hostile-orb', 14, 14, () => {
+      g.fillStyle(0xe8435a, 0.35).fillCircle(7, 7, 7);
+      g.fillStyle(0xb02a6a).fillCircle(7, 7, 4.5);
+      g.fillStyle(0xffc4d6).fillCircle(7, 7, 2);
     });
 
     bake('drop-currency', 14, 14, () => {

@@ -18,7 +18,7 @@ import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, rollDrops } from '../combat/drops';
-import { ENEMIES, type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
+import { ENEMIES, type EnemyDef, SHADOW_COLOSSUS, enemyForDepth, rollRoomEnemies } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
@@ -27,6 +27,7 @@ import type { DebugTarget } from '../debug/commands';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
+import { HostileOrb } from '../entities/HostileOrb';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import type { BossIntroData } from './BossIntroScene';
@@ -38,6 +39,9 @@ const ENTRY: Record<Dir, { col: number; row: number }> = {
   left: { col: 1, row: DOOR_ROW },
   right: { col: ROOM_COLS - 2, row: DOOR_ROW },
 };
+
+/** Enough for a few volleys at once; a full pool skips the shot. */
+const ORB_POOL_SIZE = 40;
 
 /** Drops lie where they fell until the player walks over them. */
 const DROP_PICKUP_RADIUS = 20;
@@ -94,6 +98,8 @@ export class GameScene extends Phaser.Scene {
   private doorBlocks!: Phaser.Physics.Arcade.StaticGroup;
   private enemies!: Phaser.Physics.Arcade.Group;
   private bolts!: Phaser.Physics.Arcade.Group;
+  /** Pool of enemy projectiles; orbs are released, never destroyed, until the scene restarts. */
+  private orbs!: Phaser.Physics.Arcade.Group;
   /** Everything owned by the current room; destroyed on room change. */
   private roomDecor: { destroy(): void }[] = [];
   private transitioning = false;
@@ -146,6 +152,7 @@ export class GameScene extends Phaser.Scene {
     this.doorBlocks = this.physics.add.staticGroup();
     this.enemies = this.physics.add.group();
     this.bolts = this.physics.add.group();
+    this.orbs = this.physics.add.group({ classType: HostileOrb, maxSize: ORB_POOL_SIZE });
 
     const stats = this.currentStats();
     this.player = new Player(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW), stats);
@@ -188,6 +195,15 @@ export class GameScene extends Phaser.Scene {
       bolt.burst();
       if (!enemy.hit(bolt.damage, bolt.x, bolt.y)) return;
       this.killEnemy(enemy);
+    });
+
+    p.add.collider(this.orbs, [this.walls, this.doorBlocks], (orb) => (orb as HostileOrb).release());
+    p.add.overlap(this.player, this.orbs, (_, o) => {
+      const orb = o as HostileOrb;
+      if (!orb.active) return;
+      orb.release();
+      if (this.cheats.god) return;
+      if (this.player.hurt(orb.damage) && this.player.health <= 0) this.onDeath();
     });
 
     p.add.overlap(this.player, this.enemies, (_, e) => {
@@ -263,6 +279,7 @@ export class GameScene extends Phaser.Scene {
     this.doorBlocks.clear(true, true);
     this.enemies.clear(true, true);
     this.bolts.clear(true, true);
+    for (const orb of this.orbs.getChildren() as HostileOrb[]) orb.release();
 
     this.buildLayout(room);
 
@@ -331,16 +348,20 @@ export class GameScene extends Phaser.Scene {
 
     const rng = new Rng(`${this.seed}:room:${this.depth}:${room.x},${room.y}`);
     const { min, max } = enemiesPerRoom(this.depth);
-    this.spawnPack(enemyForDepth(SHADOW, this.depth), rng.int(min, max), rng);
+    const kinds = rollRoomEnemies(rng, this.depth, rng.int(min, max));
+    this.spawnPack(
+      kinds.map((def) => enemyForDepth(def, this.depth)),
+      rng,
+    );
   }
 
-  /** `count` enemies on shuffled floor tiles away from the player; more than fit wrap around. */
-  private spawnPack(def: EnemyDef, count: number, rng: Rng) {
+  /** `defs` on shuffled floor tiles away from the player; more than fit wrap around. */
+  private spawnPack(defs: readonly EnemyDef[], rng: Rng) {
     const cells = rng.shuffle(this.cellsAwayFromPlayer());
-    for (let i = 0; i < count; i++) {
+    defs.forEach((def, i) => {
       const { col, row } = cells[i % cells.length];
       this.spawnEnemy(def, tileX(col), tileY(row), rng.next() * 1000);
-    }
+    });
   }
 
   private cellsAwayFromPlayer(): { col: number; row: number }[] {
@@ -358,7 +379,13 @@ export class GameScene extends Phaser.Scene {
     const enemy = new Enemy(this, this.clock, x, y, def, wobbleSeed);
     this.enemies.add(enemy);
     enemy.initBody();
+    enemy.shoot = this.fireOrb;
   }
+
+  /** A full pool drops the shot rather than growing mid fight. */
+  private readonly fireOrb = (x: number, y: number, angle: number, speed: number, damage: number) => {
+    (this.orbs.get(x, y) as HostileOrb | null)?.fire(x, y, angle, speed, damage);
+  };
 
   private killEnemy(enemy: Enemy) {
     const { x, y } = enemy;
@@ -653,7 +680,7 @@ export class GameScene extends Phaser.Scene {
     const def = ENEMIES.find((e) => e.id === enemyId);
     if (!def) return;
     const rng = new Rng(`${this.seed}:debug:${this.depth}:${this.debugSpawns++}`);
-    this.spawnPack(enemyForDepth(def, this.depth), count, rng);
+    this.spawnPack(Array<EnemyDef>(count).fill(enemyForDepth(def, this.depth)), rng);
   }
 
   private debugKillAll(): number {
