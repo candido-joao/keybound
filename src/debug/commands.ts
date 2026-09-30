@@ -45,6 +45,8 @@ export interface DebugTarget {
   drop(dropId: string, count: number): void;
   /** Returns how many enemies died. */
   killAll(): number;
+  /** Sets every enemy's HP to `percent` of its max; returns how many changed. */
+  setEnemyHealth(percent: number): number;
   goToFloor(depth: number): void;
   revealMap(): void;
 }
@@ -199,6 +201,13 @@ export const COMMANDS: readonly Command[] = [
     summary: 'kill every enemy in the room',
     cheat: true,
     run: (t) => [`killed ${t.killAll()}`],
+  },
+  {
+    name: 'enemyhp',
+    args: [{ name: 'percent', kind: 'int', min: 1, max: 100 }],
+    summary: "set every enemy's hp to a % of max",
+    cheat: true,
+    run: (t, [n]) => [`${t.setEnemyHealth(Number(n))} enemies at ${n}%`],
   },
   {
     name: 'floor',

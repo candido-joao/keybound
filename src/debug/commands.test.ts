@@ -8,6 +8,7 @@ const CATALOG: Catalog = {
   stat: ['speed', 'maxHealth'],
 };
 
+/** Creates an isolated command target with observable state so tests need no running game scene. */
 function fakeTarget() {
   const state = {
     depth: 2,
@@ -19,6 +20,7 @@ function fakeTarget() {
     stats: {} as Partial<Record<StatName, number>>,
     spawned: [] as string[],
     dropped: [] as string[],
+    enemyHealth: 100,
     pedestals: [] as string[],
     floor: 0,
     revealed: false,
@@ -47,6 +49,10 @@ function fakeTarget() {
     spawnBoss: () => state.spawned.push('boss'),
     drop: (id, n) => state.dropped.push(`${id}x${n}`),
     killAll: () => 3,
+    setEnemyHealth: (percent) => {
+      state.enemyHealth = percent;
+      return 2;
+    },
     goToFloor: (depth) => (state.floor = depth),
     revealMap: () => (state.revealed = true),
   };
@@ -106,6 +112,13 @@ describe('execute', () => {
     execute('drop currency 5', target, CATALOG);
     expect(state.dropped).toEqual(['healx1', 'currencyx5']);
     expect(state.seeded).toBe(true);
+  });
+
+  it('sets enemy hp as a percent', () => {
+    const { state, target } = fakeTarget();
+    expect(execute('enemyhp 35', target, CATALOG).lines).toEqual(['2 enemies at 35%']);
+    expect(state.enemyHealth).toBe(35);
+    expect(execute('enemyhp 0', target, CATALOG).lines).toEqual(['percent must be a whole number from 1 to 100']);
   });
 
   it('rejects ids missing from the catalog', () => {

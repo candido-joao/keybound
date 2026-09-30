@@ -12,6 +12,30 @@ export interface DashAttack {
 
 export type EnemyAttack = DashAttack;
 
+/**
+ * A harder second phase. Past the HP threshold the enemy turns invulnerable for the
+ * transition, then trades its normal dash for a furious one that ricochets off walls.
+ */
+export interface FuryPhase {
+  /** Starts once HP drops below this share of the max. */
+  hpShare: number;
+  transitionMs: number;
+  /** Added to the body's colors: the shadow is near black, so a multiplied tint wouldn't show. */
+  tint: number;
+  dash: FuryDash;
+}
+
+/** Launched without stopping, after a short eye flash; the direction locks when the flash starts. */
+export interface FuryDash {
+  /** Measured from the start of the previous dash. */
+  everyMs: number;
+  flashMs: number;
+  speed: number;
+  /** Total path length, bounces included. */
+  distance: number;
+  damage: number;
+}
+
 export interface EnemyDef {
   id: string;
   name: MessageKey;
@@ -27,6 +51,7 @@ export interface EnemyDef {
   /** Bosses ignore knockback. */
   boss: boolean;
   attacks: readonly EnemyAttack[];
+  fury?: FuryPhase;
   deathColor: number;
 }
 
@@ -55,6 +80,13 @@ export const SHADOW_COLOSSUS: EnemyDef = {
   contactDamage: 10,
   boss: true,
   attacks: [{ kind: 'dash', everyMs: 2000, telegraphMs: 380, durationMs: 420, speed: 460 }],
+  fury: {
+    hpShare: 0.4,
+    transitionMs: 600,
+    tint: 0x360808,
+    // 40% farther than the normal dash (460 px/s for 420 ms).
+    dash: { everyMs: 2400, flashMs: 150, speed: 520, distance: 270, damage: 15 },
+  },
   deathColor: 0x2a2144,
 };
 
@@ -64,6 +96,13 @@ export const ENEMIES: readonly EnemyDef[] = [SHADOW, SHADOW_COLOSSUS];
 export function enemyForDepth(def: EnemyDef, depth: number): EnemyDef {
   const floorsAfterFirst = Math.max(0, depth - 1);
   return { ...def, hp: Math.round(def.hp * (1 + def.hpGrowth * floorsAfterFirst)) };
+}
+
+/** True when a hit takes HP from above the fury threshold to below it. */
+export function crossesFury(def: EnemyDef, hpBefore: number, hpAfter: number): boolean {
+  if (!def.fury) return false;
+  const threshold = def.hp * def.fury.hpShare;
+  return hpBefore >= threshold && hpAfter < threshold;
 }
 
 export function findAttack<K extends EnemyAttack['kind']>(

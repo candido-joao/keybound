@@ -173,6 +173,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('pause');
   }
 
+  /** Wires room collisions and combat overlaps, using each enemy's current contact damage. */
   private setupCollisions() {
     const p = this.physics;
     p.add.collider(this.player, [this.walls, this.doorBlocks]);
@@ -192,7 +193,7 @@ export class GameScene extends Phaser.Scene {
     p.add.overlap(this.player, this.enemies, (_, e) => {
       const enemy = e as Enemy;
       if (this.cheats.god) return;
-      if (enemy.harmful && this.player.hurt(enemy.def.contactDamage) && this.player.health <= 0) this.onDeath();
+      if (enemy.harmful && this.player.hurt(enemy.contactDamage) && this.player.health <= 0) this.onDeath();
     });
   }
 
@@ -616,6 +617,7 @@ export class GameScene extends Phaser.Scene {
       spawnBoss: () => this.debugSpawn(SHADOW_COLOSSUS.id, 1),
       drop: (dropId, count) => this.debugDrop(dropId, count),
       killAll: () => this.debugKillAll(),
+      setEnemyHealth: (percent) => this.debugEnemyHealth(percent),
       goToFloor: (depth) => scene.restart(this.carryOver(depth)),
       revealMap: () => {
         this.mapRevealed = true;
@@ -662,6 +664,17 @@ export class GameScene extends Phaser.Scene {
       killed++;
     }
     return killed;
+  }
+
+  /** Sets active enemies to a percentage of max HP, triggering fury as needed; returns their count. */
+  private debugEnemyHealth(percent: number): number {
+    let changed = 0;
+    for (const enemy of this.enemies.getChildren() as Enemy[]) {
+      if (!enemy.active) continue;
+      enemy.setHealthShare(percent / 100);
+      changed++;
+    }
+    return changed;
   }
 
   /** A tile below the player, or above near the bottom wall, so they aren't taken at once. */
