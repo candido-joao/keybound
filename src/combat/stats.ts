@@ -20,6 +20,10 @@ export interface PlayerStats {
   /** 0 = straight; higher = bolts steer harder toward the nearest enemy. */
   homing: number;
   boltScale: number;
+  /** Player sprite and body scale together; a bigger body is easier to hit. */
+  hitboxScale: number;
+  /** 0 = the default grip; higher = the player keeps sliding longer after letting go. */
+  slide: number;
 }
 
 /**
@@ -27,21 +31,41 @@ export interface PlayerStats {
  * from the base stats, so stacking order is explicit and stats can always be recomputed.
  */
 export interface Item {
+  /** `base:variant` for variants, e.g. `vital-shard:heavy`. */
   id: string;
+  /** Id of the pure item a variant belongs to; unset on pure items. */
+  base?: string;
+  /** Odds against the other versions of the same base item. */
+  weight: number;
   name: MessageKey;
+  /** Exact effect, shown only once the item is taken. */
   description: MessageKey;
+  /** Shown near the pedestal: suggests the effect without giving it away. */
+  hint: MessageKey;
   color: number;
   apply(stats: PlayerStats): PlayerStats;
 }
 
+/** The pure item's id; variants share their base's icon and count as that item in the pool. */
+export function baseId(item: Item): string {
+  return item.base ?? item.id;
+}
+
 export function computeStats(base: PlayerStats, items: readonly Item[]): PlayerStats {
   const stats = items.reduce((s, item) => item.apply({ ...s }), { ...base });
-  stats.fireDelay = Math.max(STAT_LIMITS.minFireDelay, stats.fireDelay);
-  stats.speed = Math.min(STAT_LIMITS.maxSpeed, stats.speed);
-  stats.range = Math.min(STAT_LIMITS.maxRange, stats.range);
-  stats.boltScale = Math.min(STAT_LIMITS.maxBoltScale, stats.boltScale);
-  stats.shotCount = Math.min(STAT_LIMITS.maxShotCount, stats.shotCount);
+  const L = STAT_LIMITS;
+  stats.fireDelay = clamp(stats.fireDelay, L.minFireDelay, L.maxFireDelay);
+  stats.speed = clamp(stats.speed, L.minSpeed, L.maxSpeed);
+  stats.range = clamp(stats.range, L.minRange, L.maxRange);
+  stats.boltScale = Math.min(L.maxBoltScale, stats.boltScale);
+  stats.shotCount = Math.min(L.maxShotCount, stats.shotCount);
+  stats.hitboxScale = Math.min(L.maxHitboxScale, stats.hitboxScale);
+  stats.slide = Math.min(L.maxSlide, stats.slide);
   return stats;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 /** Copies held per distinct item, in pickup order. */

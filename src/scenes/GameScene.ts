@@ -15,6 +15,7 @@ import {
   tileY,
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
+import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
 import { ENEMIES, type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
@@ -26,7 +27,7 @@ import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
-import { t } from '../i18n';
+import { type Locale, getLocale, t } from '../i18n';
 
 /** Where the player appears when entering through a given side. */
 const ENTRY: Record<Dir, { col: number; row: number }> = {
@@ -35,6 +36,9 @@ const ENTRY: Record<Dir, { col: number; row: number }> = {
   left: { col: 1, row: DOOR_ROW },
   right: { col: ROOM_COLS - 2, row: DOOR_ROW },
 };
+
+/** How close the player must be to read a pedestal's name and hint. */
+const PEDESTAL_LABEL_RANGE = TILE * 2;
 
 /** Lintel color over each door, by the room it leads to. */
 const DOOR_MARKER: Record<RoomType, number> = {
@@ -67,6 +71,10 @@ export class GameScene extends Phaser.Scene {
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
+  /** Pedestals in this room whose label shows only while the player is near. */
+  private pedestals: { x: number; y: number; item: Item; label: Phaser.GameObjects.Text }[] = [];
+  /** Language the pedestal labels were written in; the pause menu can switch it mid room. */
+  private labelLocale?: Locale;
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private doorBlocks!: Phaser.Physics.Arcade.StaticGroup;
   private enemies!: Phaser.Physics.Arcade.Group;
@@ -93,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     this.transitioning = false;
     this.gameOver = false;
     this.roomDecor = [];
+    this.pedestals = [];
     this.clock = new GameClock();
     // A restart after death would otherwise inherit the paused world.
     this.physics.resume();
@@ -100,17 +109,10 @@ export class GameScene extends Phaser.Scene {
     this.items = data.itemIds.flatMap((id) => ITEMS.find((i) => i.id === id) ?? []);
     this.floor = generateFloor(new Rng(`${this.seed}:floor:${this.depth}`), this.depth);
 
-    // Items stack, so the pool never runs dry: unowned items pop first, repeats after.
-    const itemRng = new Rng(`${this.seed}:items:${this.depth}`);
-    const unowned = itemRng.shuffle(ITEMS.filter((i) => !this.items.includes(i)));
-    const owned = itemRng.shuffle(ITEMS.filter((i) => this.items.includes(i)));
-    const itemPool = [...owned, ...unowned];
+    const rewardRooms = [...this.floor.rooms.values()].filter((r) => r.type === 'treasure' || r.type === 'boss');
+    const rewards = rollRewards(new Rng(`${this.seed}:items:${this.depth}`), ITEMS, this.items, rewardRooms.length);
     this.roomItems = new Map();
-    for (const room of this.floor.rooms.values()) {
-      if (room.type !== 'treasure' && room.type !== 'boss') continue;
-      const item = itemPool.pop();
-      if (item) this.roomItems.set(room, item);
-    }
+    rewardRooms.forEach((room, i) => rewards[i] && this.roomItems.set(room, rewards[i]));
 
     this.cameras.main.setBackgroundColor(COLORS.background);
     this.walls = this.physics.add.staticGroup();
@@ -192,6 +194,8 @@ export class GameScene extends Phaser.Scene {
       if (bolt.homing > 0) bolt.steerToward(this.nearest(bolt, enemies), dt);
     }
 
+    this.updatePedestalLabels();
+
     if (!this.room.cleared && this.enemies.countActive() === 0) this.clearRoom();
     if (this.room.cleared) this.checkDoorExit();
   }
@@ -211,6 +215,7 @@ export class GameScene extends Phaser.Scene {
 
     this.roomDecor.forEach((o) => o.destroy());
     this.roomDecor = [];
+    this.pedestals = [];
     this.walls.clear(true, true);
     this.doorBlocks.clear(true, true);
     this.enemies.clear(true, true);
@@ -352,15 +357,50 @@ export class GameScene extends Phaser.Scene {
     const orb = addItemIcon(this, x, y - 12, item).setDepth(4);
     this.tweens.add({ targets: orb, y: y - 18, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     this.physics.add.existing(pedestal, true);
-    this.roomDecor.push(pedestal, orb);
+    const label = this.pedestalLabel(x, y - 44, item);
+    const entry = { x, y, item, label };
+    this.pedestals.push(entry);
+    this.roomDecor.push(pedestal, orb, label);
 
     const pickup = this.physics.add.overlap(this.player, pedestal, () => {
       pickup.active = false;
       onTake?.();
       orb.destroy();
+      label.destroy();
+      this.pedestals = this.pedestals.filter((p) => p !== entry);
       this.grantItem(item);
     });
     this.roomDecor.push(pickup);
+  }
+
+  /** Name and hint only; the exact effect shows once the item is taken. */
+  private pedestalLabel(x: number, y: number, item: Item): Phaser.GameObjects.Text {
+    return this.add
+      .text(x, y, pedestalText(item), {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: COLORS.text,
+        align: 'center',
+        stroke: '#000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(50)
+      .setVisible(false);
+  }
+
+  private updatePedestalLabels() {
+    const locale = getLocale();
+    if (locale !== this.labelLocale) {
+      this.labelLocale = locale;
+      for (const p of this.pedestals) p.label.setText(pedestalText(p.item));
+    }
+
+    const range = PEDESTAL_LABEL_RANGE * PEDESTAL_LABEL_RANGE;
+    for (const p of this.pedestals) {
+      const near = Phaser.Math.Distance.Squared(p.x, p.y, this.player.x, this.player.y) < range;
+      if (p.label.visible !== near) p.label.setVisible(near);
+    }
   }
 
   private grantItem(item: Item) {
@@ -543,6 +583,10 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => [t1, t2].forEach((t) => t.destroy()),
       });
   }
+}
+
+function pedestalText(item: Item): string[] {
+  return [t(item.name), t(item.hint)];
 }
 
 /** Which room edge the player has walked into, if any. */

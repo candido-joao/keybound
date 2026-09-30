@@ -11,15 +11,23 @@ export const BASE_STATS: PlayerStats = {
   spread: 0,
   homing: 0,
   boltScale: 1,
+  hitboxScale: 1,
+  slide: 0,
 };
 
-/** Items can stack, so multiplicative ones need bounds. */
+/** Items can stack, so multiplicative ones need bounds, both ways since variants carry costs. */
 export const STAT_LIMITS = {
   minFireDelay: 140,
+  maxFireDelay: 3000,
+  minSpeed: 100,
   maxSpeed: 420,
+  minRange: 60,
   maxRange: 900,
   maxBoltScale: 2.5,
   maxShotCount: 7,
+  // The player body is 22 px across and doors are one 48 px tile wide.
+  maxHitboxScale: 2,
+  maxSlide: 6,
 } as const;
 
 export const PLAYER_INVULN_MS = 650;
