@@ -43,6 +43,16 @@ function hashSeed(seed: string): number {
   return h >>> 0;
 }
 
+export const SEED_MAX_LENGTH = 12;
+
+/** Seeds are typed by hand, so case and anything but letters and digits are ignored. */
+export function normalizeSeed(input: string): string {
+  return input
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, SEED_MAX_LENGTH);
+}
+
 export function randomSeed(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';

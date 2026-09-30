@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, TILE } from '../config';
+import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
 
 /**
  * Placeholder art drawn with Graphics. Real art loads in preload() under its own
@@ -53,7 +54,7 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(0x1b1830).fillRect(12, 13, 3, 3).fillRect(18, 13, 3, 3);
     });
 
-    bake('keyblade', 44, 14, () => {
+    bake('key', 44, 14, () => {
       // Handle guard, shaft, bit at the tip.
       g.fillStyle(0xf2c14e).fillRoundedRect(0, 1, 9, 12, 3);
       g.fillStyle(0xcfd6e6).fillRect(9, 5, 28, 4);
@@ -99,6 +100,19 @@ export class BootScene extends Phaser.Scene {
     });
 
     g.destroy();
-    this.scene.start('game');
+    this.launch();
+  }
+
+  /** URL params jump straight into a run, skipping the title. */
+  private launch() {
+    const params = parseLaunchParams(
+      location.search,
+      ITEMS.map((i) => i.id),
+    );
+    if (!hasLaunchParams(params)) {
+      this.scene.start('title');
+      return;
+    }
+    this.scene.start('game', runFromParams(params));
   }
 }

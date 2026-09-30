@@ -18,19 +18,13 @@ import { ITEMS, addItemIcon } from '../combat/items';
 import { BASE_STATS, bossForDepth, enemiesPerRoom, shadowForDepth } from '../combat/balance';
 import { computeStats, type Item } from '../combat/stats';
 import { GameClock } from '../core/clock';
-import { Rng, randomSeed } from '../core/rng';
+import { Rng } from '../core/rng';
+import { type RunData, type RunStats, newRun } from '../core/run';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { Shadow } from '../entities/Shadow';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 import { t } from '../i18n';
-
-export interface RunData {
-  seed?: string;
-  depth?: number;
-  itemIds?: string[];
-  health?: number;
-}
 
 /** Where the player appears when entering through a given side. */
 const ENTRY: Record<Dir, { col: number; row: number }> = {
@@ -50,6 +44,7 @@ const DOOR_MARKER: Record<RoomType, number> = {
 
 export class GameScene extends Phaser.Scene {
   seed!: string;
+  seeded!: boolean;
   depth!: number;
   floor!: Floor;
   room!: RoomNode;
@@ -57,6 +52,10 @@ export class GameScene extends Phaser.Scene {
   player!: Player;
   /** Pauses with the scene; entities time their windows against it. */
   private clock!: GameClock;
+  private kills = 0;
+  private roomsCleared = 0;
+  /** Gameplay time of earlier floors; this floor's is on the clock. */
+  private pastTimeMs = 0;
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
@@ -74,14 +73,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(data: RunData) {
-    this.seed = data.seed ?? new URLSearchParams(location.search).get('seed') ?? randomSeed();
-    this.depth = data.depth ?? 1;
+    this.seed = data.seed;
+    this.seeded = data.seeded;
+    this.depth = data.depth;
+    this.kills = data.stats.kills;
+    this.roomsCleared = data.stats.roomsCleared;
+    this.pastTimeMs = data.stats.timeMs;
     this.transitioning = false;
     this.gameOver = false;
     this.roomDecor = [];
     this.clock = new GameClock();
+    // A restart after death would otherwise inherit the paused world.
+    this.physics.resume();
 
-    this.items = (data.itemIds ?? []).flatMap((id) => ITEMS.find((i) => i.id === id) ?? []);
+    this.items = data.itemIds.flatMap((id) => ITEMS.find((i) => i.id === id) ?? []);
     this.floor = generateFloor(new Rng(`${this.seed}:floor:${this.depth}`), this.depth);
 
     // Items stack, so the pool never runs dry: unowned items pop first, repeats after.
@@ -134,8 +139,10 @@ export class GameScene extends Phaser.Scene {
       const bolt = b as Bolt;
       const enemy = e as Shadow;
       if (!bolt.active || !enemy.active) return;
-      if (enemy.hit(bolt.damage, bolt.x, bolt.y)) enemy.die();
       bolt.burst();
+      if (!enemy.hit(bolt.damage, bolt.x, bolt.y)) return;
+      enemy.die();
+      this.kills++;
     });
 
     p.add.overlap(this.player, this.enemies, (_, e) => {
@@ -278,6 +285,7 @@ export class GameScene extends Phaser.Scene {
 
   private clearRoom() {
     this.room.cleared = true;
+    this.roomsCleared++;
     this.doorBlocks.clear(true, true);
     if (this.room.type === 'boss') this.spawnBossRewards(this.room);
   }
@@ -354,11 +362,22 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.restart({
         seed: this.seed,
+        seeded: this.seeded,
         depth: this.depth + 1,
         itemIds: this.items.map((i) => i.id),
         health: this.player.health,
+        stats: this.runStats(),
       } satisfies RunData);
     });
+  }
+
+  runStats(): RunStats {
+    return { kills: this.kills, roomsCleared: this.roomsCleared, timeMs: this.pastTimeMs + this.clock.now };
+  }
+
+  /** Replays or rolls a fresh run in place; the HUD keeps running. */
+  restartRun(sameSeed: boolean) {
+    this.scene.restart(newRun(sameSeed ? this.seed : undefined));
   }
 
   // ---------------------------------------------------------------- feedback
@@ -367,11 +386,8 @@ export class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.physics.pause();
     this.player.setTint(0x555555);
-    this.showBanner(t('death.title'), t('death.hint'), 0);
-    this.input.keyboard!.once('keydown-R', () => {
-      this.physics.resume();
-      this.scene.restart({ seed: randomSeed() } satisfies RunData);
-    });
+    this.scene.launch('summary');
+    this.scene.bringToTop('summary');
   }
 
   private showBanner(title: string, subtitle = '', holdMs = 1400) {

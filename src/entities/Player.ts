@@ -13,7 +13,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   health: number;
   private clock: GameClock;
   private keys: Keys;
-  private keyblade: Phaser.GameObjects.Image;
+  private keyWeapon: Phaser.GameObjects.Image;
   private aim = Math.PI / 2;
   private nextShotAt = 0;
   private invulnUntil = 0;
@@ -30,7 +30,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setCircle(11, 5, 12);
 
-    this.keyblade = scene.add.image(x, y, 'keyblade').setOrigin(0.15, 0.5).setDepth(11);
+    this.keyWeapon = scene.add.image(x, y, 'key').setOrigin(0.15, 0.5).setDepth(11);
     this.keys = scene.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as Keys;
   }
 
@@ -77,7 +77,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const firing = sx !== 0 || sy !== 0;
     this.aim = axisAim(sx, sy) ?? this.aim;
 
-    this.updateKeyblade();
+    this.updateKeyWeapon();
     if (!firing || time < this.nextShotAt) return [];
     this.nextShotAt = time + this.stats.fireDelay;
 
@@ -88,7 +88,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const tipY = this.y + 4 + Math.sin(this.aim) * (KEY_ORBIT + 22);
     const body = this.body as Phaser.Physics.Arcade.Body;
 
-    this.scene.tweens.add({ targets: this.keyblade, scaleX: 0.8, duration: 50, yoyo: true });
+    this.scene.tweens.add({ targets: this.keyWeapon, scaleX: 0.8, duration: 50, yoyo: true });
 
     return Array.from({ length: shotCount }, (_, i) => ({
       x: tipX,
@@ -104,23 +104,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }));
   }
 
-  private updateKeyblade() {
-    this.keyblade.setPosition(this.x + Math.cos(this.aim) * KEY_ORBIT, this.y + 4 + Math.sin(this.aim) * KEY_ORBIT);
-    this.keyblade.setRotation(this.aim);
-    this.keyblade.setFlipY(Math.cos(this.aim) < -0.01);
+  private updateKeyWeapon() {
+    this.keyWeapon.setPosition(this.x + Math.cos(this.aim) * KEY_ORBIT, this.y + 4 + Math.sin(this.aim) * KEY_ORBIT);
+    this.keyWeapon.setRotation(this.aim);
+    this.keyWeapon.setFlipY(Math.cos(this.aim) < -0.01);
     // Draw the key behind the body when aiming up.
-    this.keyblade.setDepth(Math.sin(this.aim) < -0.5 ? 9 : 11);
-    this.keyblade.setAlpha(this.alpha);
+    this.keyWeapon.setDepth(Math.sin(this.aim) < -0.5 ? 9 : 11);
+    this.keyWeapon.setAlpha(this.alpha);
   }
 
   teleport(x: number, y: number) {
     this.setPosition(x, y);
     (this.body as Phaser.Physics.Arcade.Body).reset(x, y);
-    this.updateKeyblade();
+    this.updateKeyWeapon();
   }
 
   destroy(fromScene?: boolean) {
-    this.keyblade?.destroy();
+    this.keyWeapon?.destroy();
     super.destroy(fromScene);
   }
 }

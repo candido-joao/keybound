@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { summarizeItems } from '../combat/stats';
 import { COLORS, GAME_H, GAME_W } from '../config';
-import { randomSeed } from '../core/rng';
 import { LOCALE_NAMES, getLocale, nextLocale, t } from '../i18n';
 import { chooseLocale } from '../i18n/apply';
-import type { GameScene, RunData } from './GameScene';
+import { returnToTitle } from './navigation';
+import type { GameScene } from './GameScene';
 
 /** Overlay launched by GameScene on Esc; GameScene stays paused underneath. */
 export class PauseScene extends Phaser.Scene {
@@ -45,7 +45,8 @@ export class PauseScene extends Phaser.Scene {
 
     const keyboard = this.input.keyboard!;
     keyboard.once('keydown-ESC', () => this.close());
-    keyboard.once('keydown-R', () => this.close({ seed: randomSeed() }));
+    keyboard.once('keydown-R', () => this.close(true));
+    keyboard.once('keydown-Q', () => returnToTitle(this));
     keyboard.once('keydown-L', () => this.cycleLocale());
   }
 
@@ -55,11 +56,11 @@ export class PauseScene extends Phaser.Scene {
     this.scene.restart();
   }
 
-  private close(restart?: RunData) {
+  private close(newRun = false) {
     this.scene.stop();
     const game = this.scene.get('game') as GameScene;
-    if (restart) {
-      game.scene.restart(restart);
+    if (newRun) {
+      game.restartRun(false);
       return;
     }
     // Phaser already reset the game scene's keys when it paused.
