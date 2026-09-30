@@ -14,7 +14,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    for (const item of ITEMS) this.load.image(itemTextureKey(item), `items/${item.id}.png`);
+    // Variants reuse their base's icon.
+    for (const item of ITEMS) if (!item.base) this.load.image(itemTextureKey(item), `items/${item.id}.png`);
   }
 
   create() {

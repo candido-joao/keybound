@@ -7,6 +7,8 @@ import type { BoltSpec } from './Bolt';
 type Keys = Record<'W' | 'A' | 'S' | 'D' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', Phaser.Input.Keyboard.Key>;
 
 const KEY_ORBIT = 20;
+/** Share of the gap to the target velocity closed each frame. */
+const GRIP = 0.22;
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
@@ -26,7 +28,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.clock = clock;
     this.stats = stats;
     this.health = stats.maxHealth;
-    this.setDepth(10);
+    this.setDepth(10).setScale(stats.hitboxScale);
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setCircle(11, 5, 12);
 
@@ -38,6 +40,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const gained = stats.maxHealth - this.stats.maxHealth;
     this.stats = stats;
     this.health = Math.min(stats.maxHealth, this.health + Math.max(0, gained));
+    // Arcade bodies follow the sprite's scale, so this resizes the hitbox too.
+    this.setScale(stats.hitboxScale);
   }
 
   get invulnerable(): boolean {
@@ -60,10 +64,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const len = Math.hypot(ix, iy) || 1;
     const body = this.body as Phaser.Physics.Arcade.Body;
 
-    // Lerp toward target velocity: a little slide, like Isaac.
+    // Lerp toward target velocity: a little slide, like Isaac. Slide only loosens the stop.
     const tx = (ix / len) * this.stats.speed;
     const ty = (iy / len) * this.stats.speed;
-    body.setVelocity(Phaser.Math.Linear(body.velocity.x, tx, 0.22), Phaser.Math.Linear(body.velocity.y, ty, 0.22));
+    const grip = ix === 0 && iy === 0 ? GRIP / (1 + this.stats.slide) : GRIP;
+    body.setVelocity(Phaser.Math.Linear(body.velocity.x, tx, grip), Phaser.Math.Linear(body.velocity.y, ty, grip));
 
     if (ix !== 0) this.setFlipX(ix < 0);
     this.setAlpha(this.invulnerable ? (Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1) : 1);
@@ -84,8 +89,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const { shotCount, spread } = this.stats;
     const step = shotCount > 1 ? Phaser.Math.DegToRad(spread) / (shotCount - 1) : 0;
     const first = this.aim - (step * (shotCount - 1)) / 2;
-    const tipX = this.x + Math.cos(this.aim) * (KEY_ORBIT + 22);
-    const tipY = this.y + 4 + Math.sin(this.aim) * (KEY_ORBIT + 22);
+    const tip = this.orbit + 22;
+    const tipX = this.x + Math.cos(this.aim) * tip;
+    const tipY = this.y + 4 + Math.sin(this.aim) * tip;
     const body = this.body as Phaser.Physics.Arcade.Body;
 
     this.scene.tweens.add({ targets: this.keyWeapon, scaleX: 0.8, duration: 50, yoyo: true });
@@ -105,12 +111,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private updateKeyWeapon() {
-    this.keyWeapon.setPosition(this.x + Math.cos(this.aim) * KEY_ORBIT, this.y + 4 + Math.sin(this.aim) * KEY_ORBIT);
+    this.keyWeapon.setPosition(this.x + Math.cos(this.aim) * this.orbit, this.y + 4 + Math.sin(this.aim) * this.orbit);
     this.keyWeapon.setRotation(this.aim);
     this.keyWeapon.setFlipY(Math.cos(this.aim) < -0.01);
     // Draw the key behind the body when aiming up.
     this.keyWeapon.setDepth(Math.sin(this.aim) < -0.5 ? 9 : 11);
     this.keyWeapon.setAlpha(this.alpha);
+  }
+
+  /** The key circles outside the body, however big it gets. */
+  private get orbit(): number {
+    return KEY_ORBIT * this.stats.hitboxScale;
   }
 
   teleport(x: number, y: number) {

@@ -8,6 +8,7 @@ import tseslint from 'typescript-eslint';
 const PURE_LOGIC = [
   'src/combat/balance.ts',
   'src/combat/enemies.ts',
+  'src/combat/itemPool.ts',
   'src/combat/stats.ts',
   'src/core/**',
   'src/debug/commands.ts',
