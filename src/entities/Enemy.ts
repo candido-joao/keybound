@@ -77,6 +77,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return this.def.contactDamage;
   }
 
+  /** Updates pursuit using game-clock time, yielding movement to spawning, knockback and attack phases. */
   chase(target: Phaser.GameObjects.Components.Transform, time: number) {
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (!this.harmful) {
@@ -157,6 +158,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (crossesFury(this.def, before, this.hp)) this.startFury();
   }
 
+  /** Restores the phase's body color after a hit flash so fury keeps its additive tint. */
   private restoreTint() {
     if (this.furyState === 'calm') {
       this.setTintMode(Phaser.TintModes.MULTIPLY).clearTint();
@@ -181,12 +183,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.restoreTint();
   }
 
+  /** Ends the invulnerable transition and starts the aura, allowing a breather before the first dash. */
   private beginFury(time: number) {
     this.furyState = 'fury';
     this.nextFuryDashAt = time + FURY_FIRST_DASH_MS;
     this.aura?.start();
   }
 
+  /** Prepares reusable fury visuals and inset room bounds for reflecting the enemy's center. */
   private createFuryEffects() {
     const scene = this.scene;
     this.aura = scene.add
@@ -263,11 +267,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.dust?.explode(10, body.center.x, body.center.y);
   }
 
+  /** Toggles the dash warning, positioning it immediately when the flash begins. */
   private showEyes(on: boolean) {
     for (const eye of this.eyes) eye.setVisible(on);
     if (on) this.placeEyes();
   }
 
+  /** Keeps the warning sprites aligned with the scaled enemy while it chases during the flash. */
   private placeEyes() {
     for (let i = 0; i < this.eyes.length; i++) {
       const offset = EYE_OFFSETS[i];
@@ -295,6 +301,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.destroy();
   }
 
+  /** Releases scene-owned fury effects with the enemy, including during scene teardown. */
   destroy(fromScene?: boolean) {
     this.aura?.destroy();
     this.dust?.destroy();

@@ -8,6 +8,7 @@ const CATALOG: Catalog = {
   stat: ['speed', 'maxHealth'],
 };
 
+/** Creates an isolated command target with observable state so tests need no running game scene. */
 function fakeTarget() {
   const state = {
     depth: 2,

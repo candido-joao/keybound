@@ -3,6 +3,7 @@ import { ricochet } from './ricochet';
 
 const BOUNDS = { minX: 0, maxX: 100, minY: 0, maxY: 50 };
 
+/** Returns the reflected velocity and collision flag for assertions against the fixed test bounds. */
 function bounce(x: number, y: number, vx: number, vy: number) {
   const velocity = { vx, vy };
   const hit = ricochet(x, y, velocity, BOUNDS);
