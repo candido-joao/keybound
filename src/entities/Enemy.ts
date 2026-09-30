@@ -169,6 +169,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   /** Invulnerable transition: the normal dash is cancelled and the camera shakes. */
   private startFury() {
+    if (this.furyState !== 'calm') return;
     const fury = this.def.fury!;
     this.furyState = 'transition';
     this.furyReadyAt = this.clock.now + fury.transitionMs;
