@@ -11,11 +11,15 @@ const INPUT_DELAY_MS = 600;
 
 /** End-of-run overlay launched by GameScene on death; the frozen run stays visible underneath. */
 export class SummaryScene extends Phaser.Scene {
+  /** scene.stop only lands next step; without this, Enter and R in one frame would both run. */
+  private leaving = false;
+
   constructor() {
     super('summary');
   }
 
   create() {
+    this.leaving = false;
     const game = this.scene.get('game') as GameScene;
     const stats = game.runStats();
     const cx = GAME_W / 2;
@@ -60,9 +64,21 @@ export class SummaryScene extends Phaser.Scene {
 
   private bindKeys(game: GameScene) {
     const keyboard = this.input.keyboard!;
-    keyboard.once('keydown-ENTER', () => this.restart(game, false));
-    keyboard.once('keydown-R', () => this.restart(game, true));
-    keyboard.once('keydown-ESC', () => returnToTitle(this));
+    keyboard.on('keydown', (event: KeyboardEvent) => {
+      // Auto-repeat means the key was held since the fight, not pressed here.
+      if (event.repeat) return;
+      const action = this.actionFor(event.key, game);
+      if (!action || this.leaving) return;
+      this.leaving = true;
+      action();
+    });
+  }
+
+  private actionFor(key: string, game: GameScene): (() => void) | undefined {
+    if (key === 'Enter') return () => this.restart(game, false);
+    if (key === 'r' || key === 'R') return () => this.restart(game, true);
+    if (key === 'Escape') return () => returnToTitle(this);
+    return undefined;
   }
 
   private restart(game: GameScene, sameSeed: boolean) {
