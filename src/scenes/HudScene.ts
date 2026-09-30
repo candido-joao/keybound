@@ -6,6 +6,7 @@ import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
 import { type Locale, getLocale, t } from '../i18n';
 import { HealthTrail } from '../ui/healthTrail';
 import { PORTRAIT_KEYHOLE, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
+import type { Player } from '../entities/Player';
 import type { GameScene } from './GameScene';
 
 interface MapLayout {
@@ -60,6 +61,8 @@ export class HudScene extends Phaser.Scene {
   private map!: Phaser.GameObjects.Graphics;
   private gauge!: Phaser.Textures.CanvasTexture;
   private trail = new HealthTrail();
+  /** GameScene restarts (new floor, new run) replace the player while this scene keeps running. */
+  private trackedPlayer: Player | null = null;
   private drawnHealth = -1;
   private drawnMaxHealth = -1;
   private icons: Phaser.GameObjects.GameObject[] = [];
@@ -101,7 +104,7 @@ export class HudScene extends Phaser.Scene {
     if (!game.player?.active) return;
 
     const expanded = this.tab.isDown && !game.scene.isPaused();
-    this.drawHealthBar(game.player.health, game.player.stats.maxHealth, delta);
+    this.drawHealthBar(game.player, delta);
     this.drawMinimap(game, expanded ? BIG : MINI, expanded);
     this.floorLabel.setVisible(expanded);
     this.updateFloorLabel(game.depth);
@@ -129,13 +132,14 @@ export class HudScene extends Phaser.Scene {
       .image(GAUGE_X, GAUGE_Y + 7, 'player')
       .setCrop(5, 0, 23, 23)
       .setScale(1.3);
-    this.drawnHealth = -1;
-    this.drawnMaxHealth = -1;
+    this.trackedPlayer = null;
   }
 
   /** Redraws only when health, max health or the damage trail changed. */
-  private drawHealthBar(health: number, maxHealth: number, delta: number) {
-    if (this.drawnHealth < 0) this.trail.reset(health);
+  private drawHealthBar(player: Player, delta: number) {
+    const { health } = player;
+    const { maxHealth } = player.stats;
+    if (player !== this.trackedPlayer) this.trackPlayer(player);
     const trailMoved = this.trail.update(health, delta);
     if (!trailMoved && health === this.drawnHealth && maxHealth === this.drawnMaxHealth) return;
 
@@ -149,6 +153,14 @@ export class HudScene extends Phaser.Scene {
     this.gauge.refresh();
     this.drawnHealth = health;
     this.drawnMaxHealth = maxHealth;
+  }
+
+  /** A new player starts with no damage trail and forces a redraw. */
+  private trackPlayer(player: Player) {
+    this.trackedPlayer = player;
+    this.trail.reset(player.health);
+    this.drawnHealth = -1;
+    this.drawnMaxHealth = -1;
   }
 
   /** Strokes the first `length` px of the gauge, as one dash followed by a gap past its end. */
