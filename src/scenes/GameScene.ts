@@ -15,14 +15,15 @@ import {
   tileY,
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
-import { BASE_STATS, CONTACT_DAMAGE, bossForDepth, enemiesPerRoom, shadowForDepth } from '../combat/balance';
+import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
+import { type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
 import { computeStats, type Item } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
 import { type RunData, type RunStats, newRun } from '../core/run';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
-import { Shadow } from '../entities/Shadow';
+import { Enemy } from '../entities/Enemy';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 import { t } from '../i18n';
 
@@ -137,7 +138,7 @@ export class GameScene extends Phaser.Scene {
 
     p.add.overlap(this.bolts, this.enemies, (b, e) => {
       const bolt = b as Bolt;
-      const enemy = e as Shadow;
+      const enemy = e as Enemy;
       if (!bolt.active || !enemy.active) return;
       bolt.burst();
       if (!enemy.hit(bolt.damage, bolt.x, bolt.y)) return;
@@ -146,8 +147,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     p.add.overlap(this.player, this.enemies, (_, e) => {
-      const enemy = e as Shadow;
-      if (enemy.harmful && this.player.hurt(CONTACT_DAMAGE) && this.player.health <= 0) this.onDeath();
+      const enemy = e as Enemy;
+      if (enemy.harmful && this.player.hurt(enemy.def.contactDamage) && this.player.health <= 0) this.onDeath();
     });
   }
 
@@ -163,7 +164,7 @@ export class GameScene extends Phaser.Scene {
       bolt.launch(spec);
     }
 
-    const enemies = this.enemies.getChildren() as Shadow[];
+    const enemies = this.enemies.getChildren() as Enemy[];
     for (const enemy of enemies) enemy.chase(this.player, time);
 
     const dt = delta / 1000;
@@ -179,11 +180,11 @@ export class GameScene extends Phaser.Scene {
     if (this.room.cleared) this.checkDoorExit();
   }
 
-  private nearest(from: Phaser.GameObjects.Components.Transform, targets: Shadow[]): Shadow | undefined {
-    const dist = (t: Shadow) => Phaser.Math.Distance.Squared(from.x, from.y, t.x, t.y);
+  private nearest(from: Phaser.GameObjects.Components.Transform, targets: Enemy[]): Enemy | undefined {
+    const dist = (t: Enemy) => Phaser.Math.Distance.Squared(from.x, from.y, t.x, t.y);
     return targets
       .filter((t) => t.active && t.harmful)
-      .reduce<Shadow | undefined>((best, t) => (!best || dist(t) < dist(best) ? t : best), undefined);
+      .reduce<Enemy | undefined>((best, t) => (!best || dist(t) < dist(best) ? t : best), undefined);
   }
 
   // ---------------------------------------------------------------- rooms
@@ -257,10 +258,9 @@ export class GameScene extends Phaser.Scene {
 
   private spawnEnemies(room: RoomNode) {
     if (room.type === 'boss') {
-      const boss = new Shadow(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW - 1), bossForDepth(this.depth));
-      this.enemies.add(boss);
-      boss.initBody();
-      this.showBanner(t('boss.shadow-colossus'));
+      const boss = enemyForDepth(SHADOW_COLOSSUS, this.depth);
+      this.spawnEnemy(boss, tileX(DOOR_COL), tileY(DOOR_ROW - 1));
+      this.showBanner(t(boss.name));
       return;
     }
 
@@ -275,12 +275,16 @@ export class GameScene extends Phaser.Scene {
 
     const { min, max } = enemiesPerRoom(this.depth);
     const count = rng.int(min, max);
-    const config = shadowForDepth(this.depth);
+    const def = enemyForDepth(SHADOW, this.depth);
     for (const { col, row } of rng.shuffle(cells).slice(0, count)) {
-      const shadow = new Shadow(this, this.clock, tileX(col), tileY(row), config, rng.next() * 1000);
-      this.enemies.add(shadow);
-      shadow.initBody();
+      this.spawnEnemy(def, tileX(col), tileY(row), rng.next() * 1000);
     }
+  }
+
+  private spawnEnemy(def: EnemyDef, x: number, y: number, wobbleSeed = 0) {
+    const enemy = new Enemy(this, this.clock, x, y, def, wobbleSeed);
+    this.enemies.add(enemy);
+    enemy.initBody();
   }
 
   private clearRoom() {

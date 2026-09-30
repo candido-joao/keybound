@@ -2,6 +2,7 @@ import type { Messages } from './pt-BR';
 
 export const enUS = {
   'floor.label': 'Floor {n}',
+  'enemy.shadow': 'Shadow',
   'boss.shadow-colossus': 'Shadow Colossus',
   'death.title': 'Swallowed by the shadows',
   'pause.title': 'Paused',
