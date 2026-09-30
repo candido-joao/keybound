@@ -26,7 +26,7 @@ export class SummaryScene extends Phaser.Scene {
     const style = { fontFamily: 'monospace', color: COLORS.text, stroke: '#000', strokeThickness: 4 };
 
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.7).setOrigin(0);
-    this.add.text(cx, 110, t('death.title'), { ...style, fontSize: '30px', strokeThickness: 5 }).setOrigin(0.5);
+    this.add.text(cx, 110, t(game.deathTitle), { ...style, fontSize: '30px', strokeThickness: 5 }).setOrigin(0.5);
     this.add
       .text(cx, 158, t('summary.floor', { n: game.depth }), { ...style, fontSize: '18px', color: COLORS.textDim })
       .setOrigin(0.5);

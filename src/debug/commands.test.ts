@@ -5,6 +5,7 @@ const CATALOG: Catalog = {
   item: ['quickcast', 'vital-shard'],
   enemy: ['shadow', 'shadow-colossus'],
   drop: ['currency', 'heal'],
+  event: ['dark', 'twin'],
   stat: ['speed', 'maxHealth'],
 };
 
@@ -24,6 +25,7 @@ function fakeTarget() {
     pedestals: [] as string[],
     floor: 0,
     revealed: false,
+    event: '',
   };
   const target: DebugTarget = {
     depth: () => state.depth,
@@ -55,6 +57,10 @@ function fakeTarget() {
     },
     goToFloor: (depth) => (state.floor = depth),
     revealMap: () => (state.revealed = true),
+    startEvent: (id) => {
+      state.event = id;
+      return id !== 'twin';
+    },
   };
   return { state, target };
 }
@@ -119,6 +125,13 @@ describe('execute', () => {
     expect(execute('enemyhp 35', target, CATALOG).lines).toEqual(['2 enemies at 35%']);
     expect(state.enemyHealth).toBe(35);
     expect(execute('enemyhp 0', target, CATALOG).lines).toEqual(['percent must be a whole number from 1 to 100']);
+  });
+
+  it('replays the room as an event, when it fits', () => {
+    const { state, target } = fakeTarget();
+    expect(execute('event dark', target, CATALOG).lines).toEqual(['event dark']);
+    expect(state.event).toBe('dark');
+    expect(execute('event twin', target, CATALOG).lines).toEqual(["twin doesn't fit this room"]);
   });
 
   it('rejects ids missing from the catalog', () => {

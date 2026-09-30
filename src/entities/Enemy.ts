@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
-import { type DashAttack, type EnemyDef, type VolleyAttack, crossesFury, findAttack } from '../combat/enemies';
+import {
+  type DashAttack,
+  type EnemyDef,
+  type SummonAttack,
+  type VolleyAttack,
+  crossesFury,
+  findAttack,
+} from '../combat/enemies';
 import { type Bounds, type Velocity, ricochet } from '../combat/ricochet';
 import { RangeTrigger, fanAngles } from '../combat/volley';
 import { ROOM_H, ROOM_W, ROOM_X, ROOM_Y, TILE } from '../config';
@@ -11,6 +18,9 @@ const EYE_OFFSETS = [
   { x: -5, y: 1 },
   { x: 5, y: 1 },
 ] as const;
+/** How much bigger the outline silhouette is than the body: about 2 px on each side of a 32 px sprite. */
+const OUTLINE_SCALE = 1.14;
+
 /** After the transition, a short breather before the first furious dash. */
 const FURY_FIRST_DASH_MS = 800;
 /** The glow texture is 8 px; at this share of the enemy's scale it just covers an eye. */
@@ -42,6 +52,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   /** Set by GameScene; without it the enemy never fires. */
   shoot?: OrbShooter;
+  /** Set by GameScene; without it the enemy never summons. */
+  summon?: (summoner: Enemy, attack: SummonAttack) => void;
+  private summonAttack?: SummonAttack;
+  private nextSummonAt = Infinity;
+  /** Pending summon: the swell ends here and the minions appear. */
+  private summonAt = Infinity;
   private volley?: VolleyAttack;
   private rangeTrigger?: RangeTrigger;
   private nextVolleyAt = 0;
@@ -61,6 +77,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private aura?: Phaser.GameObjects.Particles.ParticleEmitter;
   private dust?: Phaser.GameObjects.Particles.ParticleEmitter;
   private eyes: Phaser.GameObjects.Image[] = [];
+  /** Same texture, filled with `def.outline` and a little bigger, just behind the body. */
+  private outline?: Phaser.GameObjects.Image;
 
   /** `def` already scaled for the floor. `wobbleSeed` offsets the chase wobble so a pack doesn't move in lockstep; pass it from the seeded Rng. */
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, def: EnemyDef, wobbleSeed = 0) {
@@ -75,7 +93,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.dash) this.nextDashAt = this.activeAt + this.dash.everyMs;
     this.volley = findAttack(def, 'volley');
     if (this.volley) this.rangeTrigger = new RangeTrigger(this.volley);
+    this.summonAttack = findAttack(def, 'summon');
+    if (this.summonAttack) this.nextSummonAt = this.activeAt + this.summonAttack.everyMs;
     this.setDepth(5).setScale(def.scale, 0.1).setAlpha(0);
+    if (def.outline !== undefined) {
+      this.outline = scene.add
+        .image(x, y, def.texture)
+        .setTintMode(Phaser.TintModes.FILL)
+        .setTint(def.outline)
+        .setDepth(this.depth - 0.1);
+      this.syncOutline();
+    }
     scene.tweens.add({ targets: this, scaleY: def.scale, alpha: 1, duration: SPAWN_MS, ease: 'Back.Out' });
   }
 
@@ -111,6 +139,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (time < this.knockedUntil) return;
     if (this.furyState === 'fury' && this.updateFuryDash(target, time)) return;
     if (this.furyState === 'calm' && this.updateVolley(target, time)) return;
+    if (this.furyState === 'calm' && this.updateSummon(time)) return;
     if (this.furyState === 'calm' && this.updateDash(target, time)) return;
 
     const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
@@ -167,6 +196,33 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.scene.tweens.killTweensOf(this);
     this.setScale(this.def.scale);
     this.startVolley(volley, time);
+    return true;
+  }
+
+  /** Returns true while the summon owns movement: standing still and swelling, then calling in help. */
+  private updateSummon(time: number): boolean {
+    const summon = this.summonAttack;
+    if (!summon) return false;
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    if (this.summonAt !== Infinity) {
+      body.setVelocity(0, 0);
+      if (time < this.summonAt) return true;
+      this.summonAt = Infinity;
+      this.summon?.(this, summon);
+      return true;
+    }
+    // Never on top of a dash or a volley already under way.
+    if (time < this.nextSummonAt || time < this.dashingUntil || this.volleyFireAt !== Infinity) return false;
+
+    this.nextSummonAt = time + summon.everyMs;
+    this.summonAt = time + summon.telegraphMs;
+    body.setVelocity(0, 0);
+    this.scene.tweens.add({
+      targets: this,
+      scaleY: this.def.scale * 1.2,
+      duration: summon.telegraphMs / 2,
+      yoyo: true,
+    });
     return true;
   }
 
@@ -230,12 +286,23 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setTintMode(Phaser.TintModes.FILL).setTint(0xffffff);
     this.scene.time.delayedCall(70, () => this.active && this.restoreTint());
 
-    if (!this.def.boss) {
+    if (!this.def.boss && !this.def.miniBoss) {
       const angle = Phaser.Math.Angle.Between(fromX, fromY, this.x, this.y);
       (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
       this.knockedUntil = this.clock.now + 110;
     }
     return this.hp <= 0;
+  }
+
+  /** Straight into fury, whatever the HP: a twin whose partner fell. */
+  enrage() {
+    if (this.def.fury) this.startFury();
+  }
+
+  /** Pushes the next attacks back, so enemies spawned together don't strike in lockstep. */
+  delayAttacks(ms: number) {
+    this.nextDashAt += ms;
+    this.nextVolleyAt += ms;
   }
 
   /** Debug: sets HP to a share of the max, entering fury if that crosses the threshold. */
@@ -399,7 +466,24 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   /** Releases scene-owned fury effects with the enemy, including during scene teardown. */
+  preUpdate(time: number, delta: number) {
+    super.preUpdate(time, delta);
+    this.syncOutline();
+  }
+
+  /** Follows the body every frame, spawn rise and flips included. */
+  private syncOutline() {
+    const outline = this.outline;
+    if (!outline) return;
+    outline
+      .setPosition(this.x, this.y)
+      .setScale(this.scaleX * OUTLINE_SCALE, this.scaleY * OUTLINE_SCALE)
+      .setFlipX(this.flipX)
+      .setAlpha(this.alpha * 0.9);
+  }
+
   destroy(fromScene?: boolean) {
+    this.outline?.destroy();
     this.aura?.destroy();
     this.dust?.destroy();
     for (const eye of this.eyes) eye.destroy();

@@ -20,6 +20,8 @@ export interface RunData {
   health?: number;
   currency: number;
   luck: DropLuck;
+  /** Max HP traded away at blood altars, taken off the computed max for the rest of the run. */
+  maxHealthLost: number;
   stats: RunStats;
   /** Debug console changes, kept across floors. */
   cheats?: RunCheats;
@@ -48,6 +50,7 @@ export function newRun(seed?: string): RunData {
     itemIds: [],
     currency: 0,
     luck: FRESH_LUCK,
+    maxHealthLost: 0,
     stats: { kills: 0, roomsCleared: 0, timeMs: 0 },
   };
 }

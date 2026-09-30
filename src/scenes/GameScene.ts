@@ -4,6 +4,7 @@ import {
   DOOR_COL,
   DOOR_ROW,
   GAME_W,
+  LABEL_RANGE,
   ROOM_COLS,
   ROOM_H,
   ROOM_ROWS,
@@ -18,7 +19,14 @@ import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, rollDrops } from '../combat/drops';
-import { ENEMIES, type EnemyDef, SHADOW_COLOSSUS, enemyForDepth, rollRoomEnemies } from '../combat/enemies';
+import {
+  ENEMIES,
+  type EnemyDef,
+  SHADOW_COLOSSUS,
+  type SummonAttack,
+  enemyForDepth,
+  rollRoomEnemies,
+} from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
@@ -29,8 +37,19 @@ import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { HostileOrb } from '../entities/HostileOrb';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
+import {
+  EVENT_TUNING,
+  type RoomEventId,
+  curseStrays,
+  eventRoomType,
+  miniBossDef,
+  payAltar,
+  rollRoomEvents,
+  twinDef,
+} from '../floor/roomEvents';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import type { BossIntroData } from './BossIntroScene';
+import { type EventHost, RoomEventDirector } from './RoomEventDirector';
 
 /** Where the player appears when entering through a given side. */
 const ENTRY: Record<Dir, { col: number; row: number }> = {
@@ -40,6 +59,9 @@ const ENTRY: Record<Dir, { col: number; row: number }> = {
   right: { col: ROOM_COLS - 2, row: DOOR_ROW },
 };
 
+/** How far from a mini boss its summons appear. */
+const SUMMON_RING = TILE * 1.4;
+
 /** Enough for a few volleys at once; a full pool skips the shot. */
 const ORB_POOL_SIZE = 40;
 
@@ -48,8 +70,10 @@ const DROP_PICKUP_RADIUS = 20;
 /** Drops land around the kill, not stacked on one spot. */
 const DROP_SCATTER = 14;
 
-/** How close the player must be to read a pedestal's name and hint. */
-const PEDESTAL_LABEL_RANGE = TILE * 2;
+const CURSED_FLOOR_TINT = 0xc9a8ff;
+
+/** A pedestal that must be stepped away from first arms beyond this distance. */
+const PEDESTAL_ARM_RANGE = TILE;
 
 /** Lintel color over each door, by the room it leads to. */
 const DOOR_MARKER: Record<RoomType, number> = {
@@ -59,7 +83,7 @@ const DOOR_MARKER: Record<RoomType, number> = {
   boss: COLORS.boss,
 };
 
-export class GameScene extends Phaser.Scene {
+export class GameScene extends Phaser.Scene implements EventHost {
   seed!: string;
   seeded!: boolean;
   depth!: number;
@@ -69,6 +93,9 @@ export class GameScene extends Phaser.Scene {
   currency = 0;
   /** Heal orb odds carried across floors. */
   private luck!: DropLuck;
+  /** Max HP traded away at blood altars this run. */
+  private maxHealthLost = 0;
+  private eventDirector!: RoomEventDirector;
   private dropRng!: Rng;
   /** Pickups lying in the current room. */
   private drops: { kind: DropKind; image: Phaser.GameObjects.Image }[] = [];
@@ -87,11 +114,19 @@ export class GameScene extends Phaser.Scene {
   mapRevealed = false;
   /** Gives each console spawn its own Rng stream. */
   private debugSpawns = 0;
+  /** Gives each mini boss summon its own Rng stream. */
+  private summons = 0;
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
   /** Pedestals in this room whose label shows only while the player is near. */
-  private pedestals: { x: number; y: number; item: Item; label: Phaser.GameObjects.Text }[] = [];
+  private pedestals: {
+    x: number;
+    y: number;
+    item: Item;
+    label: Phaser.GameObjects.Text;
+    pickup: Phaser.Physics.Arcade.Collider;
+  }[] = [];
   /** Language the pedestal labels were written in; the pause menu can switch it mid room. */
   private labelLocale?: Locale;
   private walls!: Phaser.Physics.Arcade.StaticGroup;
@@ -104,6 +139,9 @@ export class GameScene extends Phaser.Scene {
   private roomDecor: { destroy(): void }[] = [];
   private transitioning = false;
   private gameOver = false;
+  private bannerTexts: Phaser.GameObjects.Text[] = [];
+  /** What the run summary says killed the player. */
+  deathTitle: MessageKey = 'death.title';
   /** The boss intro holds the clock and physics until it ends. */
   private inBossIntro = false;
   /** Summed over every living boss in the room; `max` 0 when there is none. Refreshed each frame for the HUD. */
@@ -123,17 +161,21 @@ export class GameScene extends Phaser.Scene {
     this.cheats = { god: data.cheats?.god ?? false, stats: { ...data.cheats?.stats } };
     this.mapRevealed = false;
     this.debugSpawns = 0;
+    this.summons = 0;
     this.transitioning = false;
     this.gameOver = false;
     this.inBossIntro = false;
     this.bossHealth.hp = 0;
     this.bossHealth.max = 0;
     this.roomDecor = [];
+    this.bannerTexts = [];
+    this.deathTitle = 'death.title';
     this.pedestals = [];
     this.drops = [];
     this.leftDrops = new Map();
     this.currency = data.currency;
     this.luck = data.luck;
+    this.maxHealthLost = data.maxHealthLost;
     this.dropRng = new Rng(`${this.seed}:drops:${this.depth}`);
     this.clock = new GameClock();
     // A restart after death would otherwise inherit the paused world.
@@ -141,6 +183,9 @@ export class GameScene extends Phaser.Scene {
 
     this.items = data.itemIds.flatMap((id) => ITEMS.find((i) => i.id === id) ?? []);
     this.floor = generateFloor(new Rng(`${this.seed}:floor:${this.depth}`), this.depth);
+    const events = rollRoomEvents(new Rng(`${this.seed}:events:${this.depth}`), this.floor.rooms.values());
+    for (const [room, id] of events) room.event = id;
+    this.eventDirector = new RoomEventDirector(this, this);
 
     const rewardRooms = [...this.floor.rooms.values()].filter((r) => r.type === 'treasure' || r.type === 'boss');
     const rewards = rollRewards(new Rng(`${this.seed}:items:${this.depth}`), ITEMS, this.items, rewardRooms.length);
@@ -240,8 +285,9 @@ export class GameScene extends Phaser.Scene {
 
     this.updateDrops();
     this.updatePedestalLabels();
+    this.eventDirector.update();
 
-    if (!this.room.cleared && this.enemies.countActive() === 0) this.clearRoom();
+    if (!this.room.cleared && this.enemies.countActive() === 0 && !this.eventDirector.holdsClear()) this.clearRoom();
     if (this.room.cleared) this.checkDoorExit();
   }
 
@@ -250,7 +296,7 @@ export class GameScene extends Phaser.Scene {
     boss.hp = 0;
     boss.max = 0;
     for (const enemy of enemies) {
-      if (!enemy.active || !enemy.def.boss) continue;
+      if (!enemy.active || (!enemy.def.boss && !enemy.def.miniBoss)) continue;
       boss.hp += Math.max(0, enemy.hp);
       boss.max += enemy.def.hp;
       boss.name = enemy.def.name;
@@ -287,8 +333,10 @@ export class GameScene extends Phaser.Scene {
     this.player.teleport(tileX(entry.col), tileY(entry.row));
 
     this.restoreDrops(room);
-    if (!room.cleared) this.spawnEnemies(room);
+    const eventSpawned = this.eventDirector.enter(room);
+    if (!room.cleared && !eventSpawned) this.spawnEnemies(room);
     if (room.type === 'treasure' && !room.itemTaken) this.spawnItem(room, DOOR_ROW);
+    if (room.event === 'miniboss' && room.cleared && !room.itemTaken) this.spawnItem(room, DOOR_ROW);
     if (room.type === 'boss' && room.cleared) this.spawnBossRewards(room);
   }
 
@@ -300,6 +348,7 @@ export class GameScene extends Phaser.Scene {
 
   private buildLayout(room: RoomNode) {
     const floor = this.add.tileSprite(ROOM_X, ROOM_Y, ROOM_W, ROOM_H, 'floor').setOrigin(0).setDepth(0);
+    if (isCursed(room)) floor.setTint(CURSED_FLOOR_TINT);
     this.roomDecor.push(floor);
 
     const doors = new Set(this.floor.doors(room));
@@ -329,9 +378,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Small colored lintel so boss/treasure doors read at a glance. */
+  /** Small colored lintel so boss/treasure doors read at a glance, and a cursed room can be avoided. */
   private doorMarker(col: number, row: number, dir: Dir, neighbor: RoomNode) {
-    const color = DOOR_MARKER[neighbor.type];
+    const color = isCursed(neighbor) ? COLORS.curse : DOOR_MARKER[neighbor.type];
     const horizontal = dir === 'up' || dir === 'down';
     const x = tileX(col) + DIRS[dir].dx * (TILE / 2 - 3);
     const y = tileY(row) + DIRS[dir].dy * (TILE / 2 - 3);
@@ -346,13 +395,58 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const rng = new Rng(`${this.seed}:room:${this.depth}:${room.x},${room.y}`);
+    this.spawnWave(room, 0);
+  }
+
+  spawnWave(room: RoomNode, wave: number, transform?: (def: EnemyDef) => EnemyDef) {
+    // Wave 0 keeps the plain room's stream, so a room rolls the same with or without an event.
+    const suffix = wave > 0 ? `:w${wave}` : '';
+    const rng = new Rng(`${this.seed}:room:${this.depth}:${room.x},${room.y}${suffix}`);
     const { min, max } = enemiesPerRoom(this.depth);
     const kinds = rollRoomEnemies(rng, this.depth, rng.int(min, max));
-    this.spawnPack(
-      kinds.map((def) => enemyForDepth(def, this.depth)),
-      rng,
-    );
+    const defs = kinds.map((def) => enemyForDepth(def, this.depth));
+    this.spawnPack(transform ? defs.map(transform) : curseStrays(rng, defs, this.depth), rng);
+  }
+
+  spawnMiniBoss(room: RoomNode) {
+    const rng = new Rng(`${this.seed}:miniboss:${this.depth}:${room.x},${room.y}`);
+    const [kind] = rollRoomEnemies(rng, this.depth, 1);
+    const def = miniBossDef(enemyForDepth(kind, this.depth));
+    this.spawnPack([def], rng);
+    this.showBanner(t(def.name));
+  }
+
+  /** Plain copies around the summoner, in a ring, kept inside the room. */
+  private readonly summonMinions = (summoner: Enemy, attack: SummonAttack) => {
+    const base = ENEMIES.find((e) => e.id === attack.minionId);
+    if (!base || this.enemies.countActive() >= attack.maxAlive) return;
+    const rng = new Rng(`${this.seed}:summon:${this.depth}:${this.summons++}`);
+    const count = rng.int(attack.min, attack.max);
+    const def = enemyForDepth(base, this.depth);
+    const margin = TILE * 1.5;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rng.next();
+      const x = Phaser.Math.Clamp(
+        summoner.x + Math.cos(angle) * SUMMON_RING,
+        ROOM_X + margin,
+        ROOM_X + ROOM_W - margin,
+      );
+      const y = Phaser.Math.Clamp(
+        summoner.y + Math.sin(angle) * SUMMON_RING,
+        ROOM_Y + margin,
+        ROOM_Y + ROOM_H - margin,
+      );
+      this.spawnEnemy(def, x, y, rng.next() * 1000);
+    }
+  };
+
+  /** Two smaller Colossi a few tiles apart, their attacks out of step. */
+  spawnTwins() {
+    const def = twinDef(enemyForDepth(SHADOW_COLOSSUS, this.depth));
+    const y = tileY(DOOR_ROW - 1);
+    this.spawnEnemy(def, tileX(DOOR_COL - 2), y);
+    this.spawnEnemy(def, tileX(DOOR_COL + 2), y).delayAttacks(EVENT_TUNING.twin.desyncMs);
+    this.startBossIntro(def, tileX(DOOR_COL), y);
   }
 
   /** `defs` on shuffled floor tiles away from the player; more than fit wrap around. */
@@ -375,11 +469,13 @@ export class GameScene extends Phaser.Scene {
     return cells;
   }
 
-  private spawnEnemy(def: EnemyDef, x: number, y: number, wobbleSeed = 0) {
+  private spawnEnemy(def: EnemyDef, x: number, y: number, wobbleSeed = 0): Enemy {
     const enemy = new Enemy(this, this.clock, x, y, def, wobbleSeed);
     this.enemies.add(enemy);
     enemy.initBody();
     enemy.shoot = this.fireOrb;
+    enemy.summon = this.summonMinions;
+    return enemy;
   }
 
   /** A full pool drops the shot rather than growing mid fight. */
@@ -391,9 +487,23 @@ export class GameScene extends Phaser.Scene {
     const { x, y } = enemy;
     enemy.die();
     this.kills++;
-    const roll = rollDrops(this.dropRng, this.luck);
-    this.luck = roll.luck;
-    for (const kind of roll.drops) this.spawnDrop(kind, x, y);
+    const rolls = enemy.def.cursed ? 2 : 1;
+    const kinds: DropKind[] = [];
+    for (let i = 0; i < rolls; i++) {
+      const roll = rollDrops(this.dropRng, this.luck);
+      this.luck = roll.luck;
+      kinds.push(...roll.drops);
+    }
+    for (const kind of kinds) this.spawnDrop(kind, x, y);
+    this.eventDirector.onDrops(kinds);
+    if (enemy.def.boss && this.room.event === 'twin') this.enrageSurvivingBosses();
+  }
+
+  /** When a twin falls, the other goes into fury at once, whatever its HP. */
+  private enrageSurvivingBosses() {
+    for (const other of this.enemies.getChildren() as Enemy[]) {
+      if (other.active && other.def.boss) other.enrage();
+    }
   }
 
   private startBossIntro(boss: EnemyDef, x: number, y: number) {
@@ -415,6 +525,7 @@ export class GameScene extends Phaser.Scene {
     this.room.cleared = true;
     this.roomsCleared++;
     this.doorBlocks.clear(true, true);
+    this.eventDirector.onClear(this.room);
     if (this.room.type === 'boss') this.spawnBossRewards(this.room);
   }
 
@@ -491,14 +602,17 @@ export class GameScene extends Phaser.Scene {
     this.currency = next.currency;
   }
 
-  private spawnItem(room: RoomNode, row: number) {
+  private spawnItem(room: RoomNode, row: number, armWhenAway = false) {
     const item = this.roomItems.get(room);
     if (!item) return;
-    this.placePedestal(DOOR_COL, row, item, () => (room.itemTaken = true));
+    this.placePedestal(DOOR_COL, row, item, () => (room.itemTaken = true), armWhenAway);
   }
 
-  /** Pedestal holding `item` on a room tile; `onTake` runs once, when the player grabs it. */
-  private placePedestal(col: number, row: number, item: Item, onTake?: () => void) {
+  /**
+   * Pedestal holding `item` on a room tile; `onTake` runs once, when the player grabs it.
+   * With `armWhenAway`, it can't be grabbed until the player has stepped off it once.
+   */
+  private placePedestal(col: number, row: number, item: Item, onTake?: () => void, armWhenAway = false) {
     const x = tileX(col);
     const y = tileY(row);
 
@@ -507,8 +621,6 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: orb, y: y - 18, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     this.physics.add.existing(pedestal, true);
     const label = this.pedestalLabel(x, y - 44, item);
-    const entry = { x, y, item, label };
-    this.pedestals.push(entry);
     this.roomDecor.push(pedestal, orb, label);
 
     const pickup = this.physics.add.overlap(this.player, pedestal, () => {
@@ -519,6 +631,9 @@ export class GameScene extends Phaser.Scene {
       this.pedestals = this.pedestals.filter((p) => p !== entry);
       this.grantItem(item);
     });
+    pickup.active = !armWhenAway;
+    const entry = { x, y, item, label, pickup };
+    this.pedestals.push(entry);
     this.roomDecor.push(pickup);
   }
 
@@ -545,10 +660,13 @@ export class GameScene extends Phaser.Scene {
       for (const p of this.pedestals) p.label.setText(pedestalText(p.item));
     }
 
-    const range = PEDESTAL_LABEL_RANGE * PEDESTAL_LABEL_RANGE;
+    const range = LABEL_RANGE * LABEL_RANGE;
+    const armRange = PEDESTAL_ARM_RANGE * PEDESTAL_ARM_RANGE;
     for (const p of this.pedestals) {
-      const near = Phaser.Math.Distance.Squared(p.x, p.y, this.player.x, this.player.y) < range;
+      const distance = Phaser.Math.Distance.Squared(p.x, p.y, this.player.x, this.player.y);
+      const near = distance < range;
       if (p.label.visible !== near) p.label.setVisible(near);
+      if (!p.pickup.active && distance > armRange) p.pickup.active = true;
     }
   }
 
@@ -559,7 +677,66 @@ export class GameScene extends Phaser.Scene {
   }
 
   private currentStats(): PlayerStats {
-    return { ...computeStats(BASE_STATS, this.items), ...this.cheats.stats };
+    const stats = computeStats(BASE_STATS, this.items);
+    return { ...stats, maxHealth: stats.maxHealth - this.maxHealthLost, ...this.cheats.stats };
+  }
+
+  // ---------------------------------------------------------------- event host
+
+  now(): number {
+    return this.clock.now;
+  }
+
+  enemiesLeft(): number {
+    return this.enemies.countActive();
+  }
+
+  rainDrops(kinds: readonly DropKind[]) {
+    for (const kind of kinds) {
+      const x = ROOM_X + TILE + this.dropRng.next() * (ROOM_W - TILE * 2);
+      const y = ROOM_Y + TILE + this.dropRng.next() * (ROOM_H - TILE * 2);
+      this.spawnDrop(kind, x, y);
+    }
+  }
+
+  payAltar(room: RoomNode, rng: Rng) {
+    const player = this.player;
+    const paid = payAltar({ health: player.health, maxHealth: player.stats.maxHealth });
+    this.maxHealthLost += paid.cost;
+    player.setStats(this.currentStats());
+    player.health = Phaser.Math.Clamp(paid.health, 0, player.stats.maxHealth);
+    if (player.health <= 0 && !this.cheats.god) {
+      this.onDeath('death.greed');
+      return;
+    }
+    player.health = Math.max(1, player.health);
+    const [item] = rollRewards(rng, ITEMS, this.items, 1);
+    room.altarPaid = true;
+    if (!item) return;
+    this.roomItems.set(room, item);
+    this.placeAltarPedestal(room);
+  }
+
+  /** Where the altar stood. The player is right there after paying, so it arms once they step away. */
+  placeAltarPedestal(room: RoomNode) {
+    this.spawnItem(room, DOOR_ROW - 2, true);
+  }
+
+  placeRewardItem(room: RoomNode, rng: Rng): boolean {
+    const [item] = rollRewards(rng, ITEMS, this.items, 1);
+    if (!item) return false;
+    this.roomItems.set(room, item);
+    // The kill can land right on the center: don't grab it before reading it.
+    this.spawnItem(room, DOOR_ROW, true);
+    return true;
+  }
+
+  banner(title: string, subtitle?: string) {
+    this.showBanner(title, subtitle);
+  }
+
+  keep(object: { destroy(): void }) {
+    this.roomDecor.push(object);
   }
 
   private spawnPortal() {
@@ -600,6 +777,7 @@ export class GameScene extends Phaser.Scene {
       health: this.player.health,
       currency: this.currency,
       luck: this.luck,
+      maxHealthLost: this.maxHealthLost,
       stats: this.runStats(),
       cheats: this.cheats,
     };
@@ -649,7 +827,19 @@ export class GameScene extends Phaser.Scene {
       revealMap: () => {
         this.mapRevealed = true;
       },
+      startEvent: (eventId) => this.debugEvent(eventId as RoomEventId),
     };
+  }
+
+  /** Replays the current room as `id`, when the room's type can hold it. */
+  private debugEvent(id: RoomEventId): boolean {
+    if (eventRoomType(id) !== this.room.type) return false;
+    this.room.event = id;
+    this.room.cleared = false;
+    this.room.itemTaken = false;
+    this.room.altarPaid = false;
+    this.enterRoom(this.room);
+    return true;
   }
 
   private debugGive(itemId: string, count: number) {
@@ -715,7 +905,8 @@ export class GameScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- feedback
 
-  private onDeath() {
+  private onDeath(title: MessageKey = 'death.title') {
+    this.deathTitle = title;
     this.gameOver = true;
     this.physics.pause();
     this.player.setTint(0x555555);
@@ -723,7 +914,10 @@ export class GameScene extends Phaser.Scene {
     this.scene.bringToTop('summary');
   }
 
+  /** One banner at a time: a new one replaces whatever is still fading, so texts never pile up. */
   private showBanner(title: string, subtitle = '', holdMs = 1400) {
+    this.tweens.killTweensOf(this.bannerTexts);
+    for (const text of this.bannerTexts) text.destroy();
     const cx = GAME_W / 2;
     const cy = ROOM_Y + ROOM_H / 2 - 60;
     const t1 = this.add
@@ -746,6 +940,7 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(100);
+    this.bannerTexts = [t1, t2];
     if (holdMs > 0)
       this.tweens.add({
         targets: [t1, t2],
@@ -759,6 +954,11 @@ export class GameScene extends Phaser.Scene {
 
 function pedestalText(item: Item): string[] {
   return [t(item.name), t(item.hint)];
+}
+
+/** A cursed room reads as cursed, from its doors and its floor, until it is cleared. */
+function isCursed(room: RoomNode): boolean {
+  return room.event === 'cursed' && !room.cleared;
 }
 
 /** Which room edge the player has walked into, if any. */

@@ -8,6 +8,7 @@ export interface Catalog {
   item: readonly string[];
   enemy: readonly string[];
   drop: readonly string[];
+  event: readonly string[];
   stat: readonly StatName[];
 }
 
@@ -49,6 +50,8 @@ export interface DebugTarget {
   setEnemyHealth(percent: number): number;
   goToFloor(depth: number): void;
   revealMap(): void;
+  /** Replays the current room as that event; false when the room's type can't hold it. */
+  startEvent(eventId: string): boolean;
 }
 
 export interface Command {
@@ -239,6 +242,13 @@ export const COMMANDS: readonly Command[] = [
       t.revealMap();
       return ['map revealed'];
     },
+  },
+  {
+    name: 'event',
+    args: [{ name: 'event', kind: 'event' }],
+    summary: 'replay this room as an event room',
+    cheat: true,
+    run: (t, [id]) => [t.startEvent(String(id)) ? `event ${id}` : `${id} doesn't fit this room`],
   },
   {
     name: 'help',
