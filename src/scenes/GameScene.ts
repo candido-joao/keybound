@@ -16,8 +16,8 @@ import {
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
-import { BASE_STATS, HEAL_ORB_HP, enemiesPerRoom } from '../combat/balance';
-import { DROPS, type DropKind, type DropLuck, rollDrops } from '../combat/drops';
+import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
+import { DROPS, type DropKind, type DropLuck, applyDrop, rollDrops } from '../combat/drops';
 import { ENEMIES, type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
@@ -421,11 +421,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private grantDrop(kind: DropKind) {
-    if (kind === 'currency') {
-      this.currency++;
-      return;
-    }
-    this.player.health = Math.min(this.player.stats.maxHealth, this.player.health + HEAL_ORB_HP);
+    const player = this.player;
+    const next = applyDrop({ health: player.health, maxHealth: player.stats.maxHealth, currency: this.currency }, kind);
+    player.health = next.health;
+    this.currency = next.currency;
   }
 
   private spawnItem(room: RoomNode, row: number) {

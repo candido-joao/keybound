@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../core/rng';
-import { DROP_ODDS } from './balance';
-import { FRESH_LUCK, healChance, rollDrops } from './drops';
+import { DROP_ODDS, HEAL_ORB_HP } from './balance';
+import { FRESH_LUCK, applyDrop, healChance, rollDrops } from './drops';
 
 describe('healChance', () => {
   it('starts at the base odds', () => {
@@ -11,6 +11,22 @@ describe('healChance', () => {
   it('grows with each miss, up to certain', () => {
     expect(healChance({ healMisses: 2 })).toBeCloseTo(DROP_ODDS.heal + 2 * DROP_ODDS.healPerMiss);
     expect(healChance({ healMisses: 1000 })).toBe(1);
+  });
+});
+
+describe('applyDrop', () => {
+  const state = { health: 30, maxHealth: 60, currency: 4 };
+
+  it('adds one currency', () => {
+    expect(applyDrop(state, 'currency')).toEqual({ ...state, currency: 5 });
+  });
+
+  it('heals by the orb amount', () => {
+    expect(applyDrop(state, 'heal').health).toBe(30 + HEAL_ORB_HP);
+  });
+
+  it('never heals past max HP', () => {
+    expect(applyDrop({ ...state, health: 58 }, 'heal').health).toBe(60);
   });
 });
 

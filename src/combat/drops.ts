@@ -1,5 +1,5 @@
 import type { Rng } from '../core/rng';
-import { DROP_ODDS } from './balance';
+import { DROP_ODDS, HEAL_ORB_HP } from './balance';
 
 export type DropKind = 'currency' | 'heal';
 
@@ -25,6 +25,19 @@ export const FRESH_LUCK: DropLuck = { healMisses: 0 };
 /** Heal orb odds grow with each kill that didn't drop one. */
 export function healChance(luck: DropLuck): number {
   return Math.min(1, DROP_ODDS.heal + DROP_ODDS.healPerMiss * luck.healMisses);
+}
+
+/** The part of a run a pickup can change. */
+export interface PickupState {
+  health: number;
+  maxHealth: number;
+  currency: number;
+}
+
+/** State after picking up one drop. Healing never passes max HP. */
+export function applyDrop(state: PickupState, kind: DropKind): PickupState {
+  if (kind === 'currency') return { ...state, currency: state.currency + 1 };
+  return { ...state, health: Math.min(state.maxHealth, state.health + HEAL_ORB_HP) };
 }
 
 /** What one kill drops, and the luck after it. */
