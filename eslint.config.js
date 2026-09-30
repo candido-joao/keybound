@@ -10,6 +10,7 @@ const PURE_LOGIC = [
   'src/combat/drops.ts',
   'src/combat/enemies.ts',
   'src/combat/itemPool.ts',
+  'src/combat/ricochet.ts',
   'src/combat/stats.ts',
   'src/core/**',
   'src/debug/commands.ts',
