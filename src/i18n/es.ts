@@ -4,6 +4,7 @@ export const es = {
   'floor.label': 'Piso {n}',
   'enemy.shadow': 'Sombra',
   'boss.shadow-colossus': 'Coloso Sombrío',
+  'boss-intro.skip': 'Enter para saltar',
   'death.title': 'Devorado por las sombras',
   'pause.title': 'Pausa',
   'pause.seed': 'semilla {seed}',

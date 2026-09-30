@@ -28,7 +28,8 @@ import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
-import { type Locale, getLocale, t } from '../i18n';
+import { type Locale, type MessageKey, getLocale, t } from '../i18n';
+import type { BossIntroData } from './BossIntroScene';
 
 /** Where the player appears when entering through a given side. */
 const ENTRY: Record<Dir, { col: number; row: number }> = {
@@ -97,6 +98,10 @@ export class GameScene extends Phaser.Scene {
   private roomDecor: { destroy(): void }[] = [];
   private transitioning = false;
   private gameOver = false;
+  /** The boss intro holds the clock and physics until it ends. */
+  private inBossIntro = false;
+  /** Summed over every living boss in the room; `max` 0 when there is none. Refreshed each frame for the HUD. */
+  readonly bossHealth: { hp: number; max: number; name?: MessageKey } = { hp: 0, max: 0 };
 
   constructor() {
     super('game');
@@ -114,6 +119,9 @@ export class GameScene extends Phaser.Scene {
     this.debugSpawns = 0;
     this.transitioning = false;
     this.gameOver = false;
+    this.inBossIntro = false;
+    this.bossHealth.hp = 0;
+    this.bossHealth.max = 0;
     this.roomDecor = [];
     this.pedestals = [];
     this.drops = [];
@@ -155,7 +163,7 @@ export class GameScene extends Phaser.Scene {
 
   /** False mid room change or after death, when overlays must not open. */
   get canPause(): boolean {
-    return !this.transitioning && !this.gameOver;
+    return !this.transitioning && !this.gameOver && !this.inBossIntro;
   }
 
   private pause() {
@@ -189,7 +197,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    if (this.gameOver || this.transitioning) return;
+    if (this.gameOver || this.transitioning || this.inBossIntro) return;
 
     this.clock.tick(delta);
     const time = this.clock.now;
@@ -202,6 +210,7 @@ export class GameScene extends Phaser.Scene {
 
     const enemies = this.enemies.getChildren() as Enemy[];
     for (const enemy of enemies) enemy.chase(this.player, time);
+    this.updateBossHealth(enemies);
 
     const dt = delta / 1000;
     for (const bolt of [...this.bolts.getChildren()] as Bolt[]) {
@@ -217,6 +226,18 @@ export class GameScene extends Phaser.Scene {
 
     if (!this.room.cleared && this.enemies.countActive() === 0) this.clearRoom();
     if (this.room.cleared) this.checkDoorExit();
+  }
+
+  private updateBossHealth(enemies: readonly Enemy[]) {
+    const boss = this.bossHealth;
+    boss.hp = 0;
+    boss.max = 0;
+    for (const enemy of enemies) {
+      if (!enemy.active || !enemy.def.boss) continue;
+      boss.hp += Math.max(0, enemy.hp);
+      boss.max += enemy.def.hp;
+      boss.name = enemy.def.name;
+    }
   }
 
   private nearest(from: Phaser.GameObjects.Components.Transform, targets: Enemy[]): Enemy | undefined {
@@ -303,7 +324,7 @@ export class GameScene extends Phaser.Scene {
     if (room.type === 'boss') {
       const boss = enemyForDepth(SHADOW_COLOSSUS, this.depth);
       this.spawnEnemy(boss, tileX(DOOR_COL), tileY(DOOR_ROW - 1));
-      this.showBanner(t(boss.name));
+      this.startBossIntro(boss, tileX(DOOR_COL), tileY(DOOR_ROW - 1));
       return;
     }
 
@@ -345,6 +366,21 @@ export class GameScene extends Phaser.Scene {
     const roll = rollDrops(this.dropRng, this.luck);
     this.luck = roll.luck;
     for (const kind of roll.drops) this.spawnDrop(kind, x, y);
+  }
+
+  private startBossIntro(boss: EnemyDef, x: number, y: number) {
+    this.inBossIntro = true;
+    (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.physics.pause();
+    const data: BossIntroData = { name: boss.name, x, y };
+    this.scene.launch('boss-intro', data);
+    this.scene.bringToTop('boss-intro');
+  }
+
+  /** Called by BossIntroScene once it has put the camera back. */
+  endBossIntro() {
+    this.inBossIntro = false;
+    this.physics.resume();
   }
 
   private clearRoom() {
