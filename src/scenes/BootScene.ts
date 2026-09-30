@@ -91,6 +91,18 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(0xffffff, 0.4).fillCircle(12, 12, 12);
     });
 
+    bake('drop-currency', 14, 14, () => {
+      g.fillStyle(0x8a6d2f).fillCircle(7, 7, 7);
+      g.fillStyle(COLORS.treasure).fillCircle(7, 7, 5.5);
+      g.fillStyle(0xfff3c4).fillRect(5, 4, 2, 5);
+    });
+
+    bake('drop-heal', 14, 14, () => {
+      g.fillStyle(COLORS.hp, 0.4).fillCircle(7, 7, 7);
+      g.fillStyle(COLORS.hp).fillCircle(7, 7, 5);
+      g.fillStyle(0xffd0d8).fillCircle(5, 5, 1.8);
+    });
+
     bake('portal', 56, 56, () => {
       g.fillStyle(0x000000).fillCircle(28, 28, 26);
       g.lineStyle(4, COLORS.bolt).strokeCircle(28, 28, 24);

@@ -5,6 +5,7 @@ import { commonPrefix, complete } from './complete';
 const CATALOG: Catalog = {
   item: ['swift-boots', 'seeker-rune', 'quickcast'],
   enemy: ['shadow', 'shadow-colossus'],
+  drop: ['currency', 'heal'],
   stat: ['speed', 'spread', 'maxHealth'],
 };
 
