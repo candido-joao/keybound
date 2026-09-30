@@ -15,9 +15,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private activeAt: number;
   private dash?: DashAttack;
   private nextDashAt = Infinity;
-  /** Pending dash launch: the telegraph ends here, then the enemy lunges at `dashTarget`. */
+  /** Pending dash launch: the telegraph ends here, then the enemy lunges at (`dashTargetX`, `dashTargetY`). */
   private dashLaunchAt = Infinity;
-  private dashTarget?: Phaser.GameObjects.Components.Transform;
+  private dashTargetX = 0;
+  private dashTargetY = 0;
   private dashingUntil = 0;
   private knockedUntil = 0;
   private wobbleSeed: number;
@@ -79,7 +80,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   private telegraphDash(dash: DashAttack, target: Phaser.GameObjects.Components.Transform, time: number) {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.dashTarget = target;
+    this.dashTargetX = target.x;
+    this.dashTargetY = target.y;
     this.dashLaunchAt = time + dash.telegraphMs;
     this.dashingUntil = time + dash.telegraphMs + dash.durationMs;
     this.scene.tweens.add({
@@ -92,8 +94,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   private launchDash(dash: DashAttack) {
     this.dashLaunchAt = Infinity;
-    const target = this.dashTarget!;
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
+    const angle = Phaser.Math.Angle.Between(this.x, this.y, this.dashTargetX, this.dashTargetY);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * dash.speed, Math.sin(angle) * dash.speed);
   }
 
