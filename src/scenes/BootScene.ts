@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
 import { ITEMS, itemTextureKey } from '../combat/items';
-import { COLORS, TILE } from '../config';
+import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
 import { PORTRAIT_KEYHOLE, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
+
+/** Light around the player in a dark room: fully lit inside, fading out to the edge. */
+const DARK_LIGHT_INNER = 50;
+const DARK_LIGHT_OUTER = 120;
 
 /**
  * Placeholder art drawn with Graphics. Real art loads in preload() under its own
@@ -124,7 +128,15 @@ export class BootScene extends Phaser.Scene {
       g.lineStyle(2, 0xc77dff).strokeCircle(28, 28, 16);
     });
 
+    bake('altar', 40, 36, () => {
+      g.fillStyle(0x3a2a3a).fillRect(2, 14, 36, 22);
+      g.fillStyle(0x54404f).fillRect(0, 10, 40, 6);
+      g.fillStyle(0x8e1b2e).fillRect(6, 11, 28, 3);
+      g.fillStyle(0xe8435a).fillCircle(20, 6, 4).fillTriangle(16, 5, 24, 5, 20, -2);
+    });
+
     this.bakePortraitFrame();
+    this.bakeDarkness();
 
     g.destroy();
     this.launch();
@@ -134,6 +146,29 @@ export class BootScene extends Phaser.Scene {
    * Keyhole behind the HUD portrait, drawn on a 2D canvas so its curves stay antialiased
    * (pixelArt turns that off for Graphics). The HUD's HP gauge traces the same outline.
    */
+  /**
+   * Twice the room in size, so centered on the player it covers the room from anywhere in it.
+   * The hole is soft-edged, drawn on a 2D canvas like the portrait frame.
+   */
+  private bakeDarkness() {
+    const w = ROOM_W * 2;
+    const h = ROOM_H * 2;
+    const texture = this.textures.createCanvas('darkness', w, h)!;
+    const ctx = texture.context;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.96)';
+    ctx.fillRect(0, 0, w, h);
+    const light = ctx.createRadialGradient(w / 2, h / 2, DARK_LIGHT_INNER, w / 2, h / 2, DARK_LIGHT_OUTER);
+    light.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    light.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, DARK_LIGHT_OUTER, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    texture.refresh();
+  }
+
   private bakePortraitFrame() {
     const { headRadius, stemBottom } = PORTRAIT_KEYHOLE;
     const cx = headRadius + 2;

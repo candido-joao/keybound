@@ -1,5 +1,6 @@
 import { FLOOR_GRID_H, FLOOR_GRID_W } from '../config';
 import type { Rng } from '../core/rng';
+import type { RoomEventId } from './roomEvents';
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
 export type RoomType = 'start' | 'normal' | 'treasure' | 'boss';
@@ -19,7 +20,12 @@ export interface RoomNode {
   depth: number;
   visited: boolean;
   cleared: boolean;
+  /** The room's reward item was taken: treasure, boss, or a paid altar's pedestal. */
   itemTaken: boolean;
+  /** Altar rooms: the price was paid and the altar turned into a pedestal. */
+  altarPaid?: boolean;
+  /** Set when the floor's events are rolled. */
+  event?: RoomEventId;
 }
 
 export class Floor {

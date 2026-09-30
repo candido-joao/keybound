@@ -33,7 +33,20 @@ export interface VolleyAttack {
   damage: number;
 }
 
-export type EnemyAttack = DashAttack | VolleyAttack;
+/** Stops and swells for `telegraphMs`, then calls in plain enemies of `minionId` around itself. */
+export interface SummonAttack {
+  kind: 'summon';
+  /** Measured from the start of the previous summon. */
+  everyMs: number;
+  telegraphMs: number;
+  min: number;
+  max: number;
+  /** Skips the summon while this many enemies are already up, so a long fight doesn't flood the room. */
+  maxAlive: number;
+  minionId: string;
+}
+
+export type EnemyAttack = DashAttack | VolleyAttack | SummonAttack;
 
 /**
  * A harder second phase. Past the HP threshold the enemy turns invulnerable for the
@@ -73,8 +86,14 @@ export interface EnemyDef {
   contactDamage: number;
   /** Bosses ignore knockback. */
   boss: boolean;
+  /** A room event's mini boss: ignores knockback and shows the boss HP bar, but isn't a floor boss. */
+  miniBoss?: boolean;
   attacks: readonly EnemyAttack[];
   fury?: FuryPhase;
+  /** Color of a silhouette drawn around the body; cursed enemies get one. */
+  outline?: number;
+  /** Stronger, and its drops are rolled twice. */
+  cursed?: boolean;
   deathColor: number;
 }
 
