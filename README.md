@@ -46,14 +46,16 @@ Qualquer um desses três pula o menu e inicia a run com seed fixa.
 ```
 src/
   scenes/     Boot (texturas), Title (menu e seed), Game (run e salas), Hud, Pause, Summary (resumo da run)
-  entities/   Player, Shadow (inimigos e boss), Bolt (projéteis)
-  combat/     atributos do jogador e definição dos itens
+  entities/   Player, Enemy (inimigos e bosses do registro), Bolt (projéteis)
+  combat/     atributos do jogador, balanceamento, itens e inimigos
   floor/      gerador procedural de andares
   core/       RNG determinístico, estado da run e parâmetros de URL
 public/items/ ícones dos itens, nomeados pelo id do item
 ```
 
 Para adicionar um item, basta incluí-lo em `src/combat/items.ts` e colocar o ícone em `public/items/<id>.png` (32×32).
+
+Inimigos e bosses ficam em `src/combat/enemies.ts`: atributos, dano de contato e ataques (como a investida do boss) são dados. O nome vai no `src/i18n`.
 
 ## Licença
 

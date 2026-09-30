@@ -1,6 +1,7 @@
 /** Source of truth for message keys; other locales must translate every key. */
 export const ptBR = {
   'floor.label': 'Andar {n}',
+  'enemy.shadow': 'Sombra',
   'boss.shadow-colossus': 'Colosso Sombrio',
   'death.title': 'Engolido pelas sombras',
   'pause.title': 'Pausado',
