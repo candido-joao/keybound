@@ -16,7 +16,8 @@ import {
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
-import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
+import { BASE_STATS, HEAL_ORB_HP, enemiesPerRoom } from '../combat/balance';
+import { DROPS, type DropKind, type DropLuck, rollDrops } from '../combat/drops';
 import { ENEMIES, type EnemyDef, SHADOW, SHADOW_COLOSSUS, enemyForDepth } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
@@ -37,6 +38,11 @@ const ENTRY: Record<Dir, { col: number; row: number }> = {
   right: { col: ROOM_COLS - 2, row: DOOR_ROW },
 };
 
+/** Drops lie where they fell until the player walks over them. */
+const DROP_PICKUP_RADIUS = 20;
+/** Drops land around the kill, not stacked on one spot. */
+const DROP_SCATTER = 14;
+
 /** How close the player must be to read a pedestal's name and hint. */
 const PEDESTAL_LABEL_RANGE = TILE * 2;
 
@@ -55,6 +61,14 @@ export class GameScene extends Phaser.Scene {
   floor!: Floor;
   room!: RoomNode;
   items: Item[] = [];
+  currency = 0;
+  /** Heal orb odds carried across floors. */
+  private luck!: DropLuck;
+  private dropRng!: Rng;
+  /** Pickups lying in the current room. */
+  private drops: { kind: DropKind; image: Phaser.GameObjects.Image }[] = [];
+  /** Pickups left behind in other rooms of this floor, put back on re-entry. */
+  private leftDrops = new Map<RoomNode, { kind: DropKind; x: number; y: number }[]>();
   player!: Player;
   /** Pauses with the scene; entities time their windows against it. */
   private clock!: GameClock;
@@ -102,6 +116,11 @@ export class GameScene extends Phaser.Scene {
     this.gameOver = false;
     this.roomDecor = [];
     this.pedestals = [];
+    this.drops = [];
+    this.leftDrops = new Map();
+    this.currency = data.currency;
+    this.luck = data.luck;
+    this.dropRng = new Rng(`${this.seed}:drops:${this.depth}`);
     this.clock = new GameClock();
     // A restart after death would otherwise inherit the paused world.
     this.physics.resume();
@@ -159,8 +178,7 @@ export class GameScene extends Phaser.Scene {
       if (!bolt.active || !enemy.active) return;
       bolt.burst();
       if (!enemy.hit(bolt.damage, bolt.x, bolt.y)) return;
-      enemy.die();
-      this.kills++;
+      this.killEnemy(enemy);
     });
 
     p.add.overlap(this.player, this.enemies, (_, e) => {
@@ -194,6 +212,7 @@ export class GameScene extends Phaser.Scene {
       if (bolt.homing > 0) bolt.steerToward(this.nearest(bolt, enemies), dt);
     }
 
+    this.updateDrops();
     this.updatePedestalLabels();
 
     if (!this.room.cleared && this.enemies.countActive() === 0) this.clearRoom();
@@ -210,6 +229,8 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- rooms
 
   private enterRoom(room: RoomNode, via?: Dir) {
+    // Empty on a fresh floor, whose `room` still points at the last floor's.
+    if (this.drops.length > 0) this.leaveDrops(this.room);
     this.room = room;
     room.visited = true;
 
@@ -226,6 +247,7 @@ export class GameScene extends Phaser.Scene {
     const entry = via ? ENTRY[DIRS[via].opposite] : { col: DOOR_COL, row: DOOR_ROW };
     this.player.teleport(tileX(entry.col), tileY(entry.row));
 
+    this.restoreDrops(room);
     if (!room.cleared) this.spawnEnemies(room);
     if (room.type === 'treasure' && !room.itemTaken) this.spawnItem(room, DOOR_ROW);
     if (room.type === 'boss' && room.cleared) this.spawnBossRewards(room);
@@ -316,6 +338,15 @@ export class GameScene extends Phaser.Scene {
     enemy.initBody();
   }
 
+  private killEnemy(enemy: Enemy) {
+    const { x, y } = enemy;
+    enemy.die();
+    this.kills++;
+    const roll = rollDrops(this.dropRng, this.luck);
+    this.luck = roll.luck;
+    for (const kind of roll.drops) this.spawnDrop(kind, x, y);
+  }
+
   private clearRoom() {
     this.room.cleared = true;
     this.roomsCleared++;
@@ -341,6 +372,61 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------------------------------------------------------------- pickups
+
+  private spawnDrop(kind: DropKind, x: number, y: number) {
+    const dx = (this.dropRng.next() * 2 - 1) * DROP_SCATTER;
+    const dy = (this.dropRng.next() * 2 - 1) * DROP_SCATTER;
+    // Kept off the walls, or a drop could land out of the player's reach.
+    const margin = TILE + DROP_PICKUP_RADIUS / 2;
+    const px = Phaser.Math.Clamp(x + dx, ROOM_X + margin, ROOM_X + ROOM_W - margin);
+    const py = Phaser.Math.Clamp(y + dy, ROOM_Y + margin, ROOM_Y + ROOM_H - margin);
+    const image = this.placeDrop(kind, px, py).setScale(0);
+    this.tweens.add({ targets: image, scale: 1, duration: 220, ease: 'Back.Out' });
+  }
+
+  private placeDrop(kind: DropKind, x: number, y: number): Phaser.GameObjects.Image {
+    const def = DROPS.find((d) => d.id === kind)!;
+    const image = this.add.image(x, y, def.texture).setDepth(3);
+    this.drops.push({ kind, image });
+    return image;
+  }
+
+  private updateDrops() {
+    const range = DROP_PICKUP_RADIUS * DROP_PICKUP_RADIUS;
+    // Backwards, so collecting one doesn't skip the next.
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const { image } = this.drops[i];
+      if (Phaser.Math.Distance.Squared(image.x, image.y, this.player.x, this.player.y) < range) this.collectDrop(i);
+    }
+  }
+
+  private collectDrop(index: number) {
+    const [drop] = this.drops.splice(index, 1);
+    drop.image.destroy();
+    this.grantDrop(drop.kind);
+  }
+
+  private leaveDrops(room: RoomNode) {
+    this.leftDrops.set(
+      room,
+      this.drops.map(({ kind, image }) => ({ kind, x: image.x, y: image.y })),
+    );
+    for (const drop of this.drops) drop.image.destroy();
+    this.drops = [];
+  }
+
+  private restoreDrops(room: RoomNode) {
+    for (const drop of this.leftDrops.get(room) ?? []) this.placeDrop(drop.kind, drop.x, drop.y);
+    this.leftDrops.delete(room);
+  }
+
+  private grantDrop(kind: DropKind) {
+    if (kind === 'currency') {
+      this.currency++;
+      return;
+    }
+    this.player.health = Math.min(this.player.stats.maxHealth, this.player.health + HEAL_ORB_HP);
+  }
 
   private spawnItem(room: RoomNode, row: number) {
     const item = this.roomItems.get(room);
@@ -449,6 +535,8 @@ export class GameScene extends Phaser.Scene {
       depth,
       itemIds: this.items.map((i) => i.id),
       health: this.player.health,
+      currency: this.currency,
+      luck: this.luck,
       stats: this.runStats(),
       cheats: this.cheats,
     };
@@ -491,6 +579,7 @@ export class GameScene extends Phaser.Scene {
       },
       spawn: (enemyId, count) => this.debugSpawn(enemyId, count),
       spawnBoss: () => this.debugSpawn(SHADOW_COLOSSUS.id, 1),
+      drop: (dropId, count) => this.debugDrop(dropId, count),
       killAll: () => this.debugKillAll(),
       goToFloor: (depth) => scene.restart(this.carryOver(depth)),
       revealMap: () => {
@@ -534,11 +623,19 @@ export class GameScene extends Phaser.Scene {
     let killed = 0;
     for (const enemy of [...this.enemies.getChildren()] as Enemy[]) {
       if (!enemy.active) continue;
-      enemy.die();
+      this.killEnemy(enemy);
       killed++;
     }
-    this.kills += killed;
     return killed;
+  }
+
+  /** A tile below the player, or above near the bottom wall, so they aren't taken at once. */
+  private debugDrop(dropId: string, count: number) {
+    const def = DROPS.find((d) => d.id === dropId);
+    if (!def) return;
+    const below = this.player.y + TILE * 2 < ROOM_Y + ROOM_H;
+    const y = below ? this.player.y + TILE : this.player.y - TILE;
+    for (let i = 0; i < count; i++) this.spawnDrop(def.id, this.player.x, y);
   }
 
   // ---------------------------------------------------------------- feedback

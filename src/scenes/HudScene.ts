@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { addItemIcon } from '../combat/items';
 import { type Item, countItems } from '../combat/stats';
-import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_W, ROOM_X } from '../config';
+import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_W, ROOM_X, ROOM_Y } from '../config';
 import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
 import { type Locale, getLocale, t } from '../i18n';
 import { HealthTrail } from '../ui/healthTrail';
@@ -42,6 +42,10 @@ const ROOM_RIGHT = ROOM_X + ROOM_W;
 const ICONS_X = ROOM_RIGHT + (GAME_W - ROOM_RIGHT - (ICONS_PER_ROW * (ICON_SIZE + ICON_GAP) - ICON_GAP)) / 2;
 const ICONS_Y = MINI.y + FLOOR_GRID_H * MINI.cellH + 14;
 
+// Currency sits in the margin left of the room, clear of the HP gauge's stem.
+const CURRENCY_X = 28;
+const CURRENCY_Y = ROOM_Y + 18;
+
 // HP gauge at the top-left traces the keyhole portrait frame and runs out of its base
 // as a straight bar. HP fills from the gauge's start, so damage eats the bar first.
 // Drawn on a 2D canvas: pixelArt turns off antialiasing for Graphics, and curves need it.
@@ -67,6 +71,8 @@ export class HudScene extends Phaser.Scene {
   private drawnMaxHealth = -1;
   private icons: Phaser.GameObjects.GameObject[] = [];
   private iconsKey = '';
+  private currencyText!: Phaser.GameObjects.Text;
+  private drawnCurrency = -1;
   private floorLabel!: Phaser.GameObjects.Text;
   private labelDepth = 0;
   private labelLocale: Locale | null = null;
@@ -84,6 +90,7 @@ export class HudScene extends Phaser.Scene {
     this.iconsKey = '';
     this.labelDepth = 0;
     this.labelLocale = null;
+    this.createCurrency();
     this.floorLabel = this.add
       .text(GAME_W / 2, BIG.y - 16, '', {
         fontFamily: 'monospace',
@@ -109,6 +116,27 @@ export class HudScene extends Phaser.Scene {
     this.floorLabel.setVisible(expanded);
     this.updateFloorLabel(game.depth);
     this.drawItemIcons(game.items);
+    this.drawCurrency(game.currency);
+  }
+
+  private createCurrency() {
+    this.drawnCurrency = -1;
+    this.add.image(CURRENCY_X, CURRENCY_Y, 'drop-currency');
+    this.currencyText = this.add
+      .text(CURRENCY_X + 12, CURRENCY_Y, '', {
+        fontFamily: 'monospace',
+        fontSize: '14px',
+        color: COLORS.text,
+        stroke: '#000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0.5);
+  }
+
+  private drawCurrency(amount: number) {
+    if (amount === this.drawnCurrency) return;
+    this.drawnCurrency = amount;
+    this.currencyText.setText(String(amount));
   }
 
   private updateFloorLabel(depth: number) {

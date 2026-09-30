@@ -1,3 +1,4 @@
+import { type DropLuck, FRESH_LUCK } from '../combat/drops';
 import type { PlayerStats } from '../combat/stats';
 import { normalizeSeed, randomSeed } from './rng';
 
@@ -17,6 +18,8 @@ export interface RunData {
   itemIds: string[];
   /** Undefined starts at full health. */
   health?: number;
+  currency: number;
+  luck: DropLuck;
   stats: RunStats;
   /** Debug console changes, kept across floors. */
   cheats?: RunCheats;
@@ -43,6 +46,8 @@ export function newRun(seed?: string): RunData {
     seeded: seed !== undefined,
     depth: 1,
     itemIds: [],
+    currency: 0,
+    luck: FRESH_LUCK,
     stats: { kills: 0, roomsCleared: 0, timeMs: 0 },
   };
 }

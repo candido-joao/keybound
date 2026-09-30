@@ -7,6 +7,7 @@ export type StatName = keyof PlayerStats;
 export interface Catalog {
   item: readonly string[];
   enemy: readonly string[];
+  drop: readonly string[];
   stat: readonly StatName[];
 }
 
@@ -40,6 +41,8 @@ export interface DebugTarget {
   setStat(name: StatName, value: number): void;
   spawn(enemyId: string, count: number): void;
   spawnBoss(): void;
+  /** Drops `count` of `dropId` around the player. */
+  drop(dropId: string, count: number): void;
   /** Returns how many enemies died. */
   killAll(): number;
   goToFloor(depth: number): void;
@@ -165,6 +168,19 @@ export const COMMANDS: readonly Command[] = [
     run: (t, [id, n = 1]) => {
       t.spawn(String(id), Number(n));
       return [`spawned ${id}${times(Number(n))}`];
+    },
+  },
+  {
+    name: 'drop',
+    args: [
+      { name: 'drop', kind: 'drop' },
+      { name: 'n', kind: 'int', optional: true, min: 1, max: MAX_SPAWN },
+    ],
+    summary: 'drop pickups around you',
+    cheat: true,
+    run: (t, [id, n = 1]) => {
+      t.drop(String(id), Number(n));
+      return [`dropped ${id}${times(Number(n))}`];
     },
   },
   {

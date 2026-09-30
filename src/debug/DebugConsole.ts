@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BASE_STATS } from '../combat/balance';
+import { DROPS } from '../combat/drops';
 import { ENEMIES } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { COLORS } from '../config';
@@ -11,6 +12,7 @@ import { History, loadHistory, saveHistory } from './history';
 const CATALOG: Catalog = {
   item: ITEMS.map((i) => i.id),
   enemy: ENEMIES.map((e) => e.id),
+  drop: DROPS.map((d) => d.id),
   stat: Object.keys(BASE_STATS) as StatName[],
 };
 

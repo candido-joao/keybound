@@ -4,6 +4,7 @@ import { type Catalog, type DebugTarget, type StatName, COMMANDS, execute, token
 const CATALOG: Catalog = {
   item: ['quickcast', 'vital-shard'],
   enemy: ['shadow', 'shadow-colossus'],
+  drop: ['currency', 'heal'],
   stat: ['speed', 'maxHealth'],
 };
 
@@ -17,6 +18,7 @@ function fakeTarget() {
     items: [] as string[],
     stats: {} as Partial<Record<StatName, number>>,
     spawned: [] as string[],
+    dropped: [] as string[],
     pedestals: [] as string[],
     floor: 0,
     revealed: false,
@@ -43,6 +45,7 @@ function fakeTarget() {
     },
     spawn: (id, n) => state.spawned.push(`${id}x${n}`),
     spawnBoss: () => state.spawned.push('boss'),
+    drop: (id, n) => state.dropped.push(`${id}x${n}`),
     killAll: () => 3,
     goToFloor: (depth) => (state.floor = depth),
     revealMap: () => (state.revealed = true),
@@ -95,6 +98,14 @@ describe('execute', () => {
     const { state, target } = fakeTarget();
     expect(execute('fly', target, CATALOG).lines).toEqual(['unknown command: fly (try help)']);
     expect(state.seeded).toBe(false);
+  });
+
+  it('drops pickups, one by default', () => {
+    const { state, target } = fakeTarget();
+    execute('drop heal', target, CATALOG);
+    execute('drop currency 5', target, CATALOG);
+    expect(state.dropped).toEqual(['healx1', 'currencyx5']);
+    expect(state.seeded).toBe(true);
   });
 
   it('rejects ids missing from the catalog', () => {
