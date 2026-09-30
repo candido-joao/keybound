@@ -27,6 +27,7 @@ Requer Node 24+ e pnpm.
 ```bash
 pnpm install
 pnpm dev       # servidor de desenvolvimento
+pnpm test      # testes da lógica pura
 pnpm build     # build de produção em dist/
 pnpm preview   # serve o build
 ```
@@ -40,6 +41,11 @@ pnpm preview   # serve o build
 Qualquer um desses três pula o menu e inicia a run com seed fixa.
 
 - `?debug` — mostra os corpos de física.
+- `?console` — liga o console de debug e salva a escolha; `?console=off` desliga.
+
+### Console de debug
+
+Com o console ligado, a tecla à esquerda do `1` (`'` no ABNT2, `` ` `` no layout americano) abre e fecha o console. O jogo pausa enquanto ele está aberto. `Tab` completa comandos e argumentos, `↑` `↓` navegam no histórico e `help` lista os comandos: itens (`give`, `take`, `pedestal`), vida e atributos (`hp`, `maxhp`, `heal`, `god`, `stat`), inimigos (`spawn`, `boss`, `kill`) e andar (`floor`, `next`, `reveal`). Qualquer comando marca a run como seed fixa.
 
 ## Estrutura
 
@@ -50,6 +56,7 @@ src/
   combat/     atributos do jogador, balanceamento, itens e inimigos
   floor/      gerador procedural de andares
   core/       RNG determinístico, estado da run e parâmetros de URL
+  debug/      console de debug: comandos, autocomplete e histórico
 public/items/ ícones dos itens, nomeados pelo id do item
 ```
 

@@ -1,3 +1,4 @@
+import type { PlayerStats } from '../combat/stats';
 import { normalizeSeed, randomSeed } from './rng';
 
 export interface RunStats {
@@ -10,13 +11,21 @@ export interface RunStats {
 /** Everything a run carries from one floor to the next. */
 export interface RunData {
   seed: string;
-  /** Chosen, not rolled (typed, URL or replay): the run counts for nothing. */
+  /** Chosen, not rolled (typed, URL or replay), or touched by the debug console: the run counts for nothing. */
   seeded: boolean;
   depth: number;
   itemIds: string[];
   /** Undefined starts at full health. */
   health?: number;
   stats: RunStats;
+  /** Debug console changes, kept across floors. */
+  cheats?: RunCheats;
+}
+
+export interface RunCheats {
+  god: boolean;
+  /** Applied over the computed stats, past STAT_LIMITS. */
+  stats: Partial<PlayerStats>;
 }
 
 export interface LaunchParams {
@@ -25,7 +34,8 @@ export interface LaunchParams {
   itemIds?: string[];
 }
 
-const MAX_LAUNCH_DEPTH = 99;
+/** Deepest floor a launch or the debug console can jump to. */
+export const MAX_DEPTH = 99;
 
 export function newRun(seed?: string): RunData {
   return {
@@ -55,7 +65,7 @@ export function parseLaunchParams(search: string, knownItemIds: readonly string[
   if (seed) params.seed = seed;
 
   const depth = Number(query.get('depth'));
-  if (Number.isInteger(depth) && depth >= 1) params.depth = Math.min(depth, MAX_LAUNCH_DEPTH);
+  if (Number.isInteger(depth) && depth >= 1) params.depth = Math.min(depth, MAX_DEPTH);
 
   const items = (query.get('items') ?? '').split(',').filter((id) => knownItemIds.includes(id));
   if (items.length > 0) params.itemIds = items;

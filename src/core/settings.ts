@@ -3,11 +3,13 @@ import { type Locale, isLocale } from '../i18n';
 export interface Settings {
   /** Null until the player picks one; the browser language decides meanwhile. */
   locale: Locale | null;
+  /** Debug console available with the ' key. Off unless turned on with ?console. */
+  console: boolean;
 }
 
 const STORAGE_KEY = 'keybound.settings';
 const VERSION = 1;
-const DEFAULTS: Settings = { locale: null };
+const DEFAULTS: Settings = { locale: null, console: false };
 
 /** Never throws: storage can be blocked (private mode) or hold data from another version. */
 export function loadSettings(): Settings {
@@ -32,5 +34,14 @@ export function parseSettings(data: unknown): Settings {
   if (typeof data !== 'object' || data === null) return { ...DEFAULTS };
   const record = data as Record<string, unknown>;
   if (record.version !== VERSION) return { ...DEFAULTS };
-  return { locale: isLocale(record.locale) ? record.locale : null };
+  return { locale: isLocale(record.locale) ? record.locale : null, console: record.console === true };
+}
+
+const CONSOLE_OFF = ['off', '0', 'false'];
+
+/** `?console` (or `=on`) turns the debug console on, `?console=off` turns it off; either is saved. Undefined when absent. */
+export function parseConsoleParam(search: string): boolean | undefined {
+  const value = new URLSearchParams(search).get('console');
+  if (value === null) return undefined;
+  return !CONSOLE_OFF.includes(value.toLowerCase());
 }
