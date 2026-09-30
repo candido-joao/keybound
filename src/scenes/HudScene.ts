@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { addItemIcon } from '../combat/items';
 import { type Item, countItems } from '../combat/stats';
-import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_W, ROOM_X, ROOM_Y } from '../config';
+import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_H, ROOM_W, ROOM_X, ROOM_Y } from '../config';
 import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
-import { type Locale, getLocale, t } from '../i18n';
+import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { HealthTrail } from '../ui/healthTrail';
 import { PORTRAIT_KEYHOLE, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
 import type { Player } from '../entities/Player';
@@ -46,6 +46,12 @@ const ICONS_Y = MINI.y + FLOOR_GRID_H * MINI.cellH + 14;
 const CURRENCY_X = 28;
 const CURRENCY_Y = ROOM_Y + 18;
 
+// Boss HP runs along the strip under the room, name on its left.
+const BOSS_BAR_W = 360;
+const BOSS_BAR_H = 6;
+const BOSS_BAR_X = (GAME_W - BOSS_BAR_W) / 2;
+const BOSS_BAR_Y = (ROOM_Y + ROOM_H + GAME_H) / 2;
+
 // HP gauge at the top-left traces the keyhole portrait frame and runs out of its base
 // as a straight bar. HP fills from the gauge's start, so damage eats the bar first.
 // Drawn on a 2D canvas: pixelArt turns off antialiasing for Graphics, and curves need it.
@@ -71,6 +77,14 @@ export class HudScene extends Phaser.Scene {
   private drawnMaxHealth = -1;
   private icons: Phaser.GameObjects.GameObject[] = [];
   private iconsKey = '';
+  private bossBar!: Phaser.GameObjects.Graphics;
+  private bossName!: Phaser.GameObjects.Text;
+  private bossTrail = new HealthTrail();
+  /** Last drawn boss state; `drawnBossMax` 0 while the bar is hidden. */
+  private drawnBossHp = -1;
+  private drawnBossMax = 0;
+  private bossNameKey?: MessageKey;
+  private bossNameLocale?: Locale;
   private currencyText!: Phaser.GameObjects.Text;
   private drawnCurrency = -1;
   private floorLabel!: Phaser.GameObjects.Text;
@@ -91,6 +105,7 @@ export class HudScene extends Phaser.Scene {
     this.labelDepth = 0;
     this.labelLocale = null;
     this.createCurrency();
+    this.createBossBar();
     this.floorLabel = this.add
       .text(GAME_W / 2, BIG.y - 16, '', {
         fontFamily: 'monospace',
@@ -117,6 +132,65 @@ export class HudScene extends Phaser.Scene {
     this.updateFloorLabel(game.depth);
     this.drawItemIcons(game.items);
     this.drawCurrency(game.currency);
+    this.drawBossBar(game.bossHealth, delta);
+  }
+
+  private createBossBar() {
+    this.bossBar = this.add.graphics().setVisible(false);
+    this.bossName = this.add
+      .text(BOSS_BAR_X - 8, BOSS_BAR_Y, '', {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        color: COLORS.text,
+        stroke: '#000',
+        strokeThickness: 3,
+      })
+      .setOrigin(1, 0.5)
+      .setVisible(false);
+    this.drawnBossHp = -1;
+    this.drawnBossMax = 0;
+    this.bossNameKey = undefined;
+  }
+
+  /** Shown while a boss lives; redraws only when its HP, the trail or the language changed. */
+  private drawBossBar(boss: { hp: number; max: number; name?: MessageKey }, delta: number) {
+    if (boss.max <= 0) {
+      if (this.drawnBossMax === 0) return;
+      this.drawnBossMax = 0;
+      this.bossBar.setVisible(false);
+      this.bossName.setVisible(false);
+      return;
+    }
+
+    if (this.drawnBossMax === 0) this.bossTrail.reset(boss.hp);
+    this.updateBossName(boss.name);
+    const trailMoved = this.bossTrail.update(boss.hp, delta);
+    if (!trailMoved && boss.hp === this.drawnBossHp && boss.max === this.drawnBossMax) return;
+
+    const width = (hp: number) => (BOSS_BAR_W * hp) / boss.max;
+    const top = BOSS_BAR_Y - BOSS_BAR_H / 2;
+    this.bossBar
+      .clear()
+      .fillStyle(0x000000)
+      .fillRect(BOSS_BAR_X - 2, top - 2, BOSS_BAR_W + 4, BOSS_BAR_H + 4)
+      .fillStyle(COLORS.hpBack)
+      .fillRect(BOSS_BAR_X, top, BOSS_BAR_W, BOSS_BAR_H)
+      .fillStyle(COLORS.hpTrail)
+      .fillRect(BOSS_BAR_X, top, width(this.bossTrail.value), BOSS_BAR_H)
+      .fillStyle(COLORS.boss)
+      .fillRect(BOSS_BAR_X, top, width(boss.hp), BOSS_BAR_H)
+      .setVisible(true);
+    this.bossName.setVisible(true);
+    this.drawnBossHp = boss.hp;
+    this.drawnBossMax = boss.max;
+  }
+
+  private updateBossName(name?: MessageKey) {
+    const locale = getLocale();
+    if (name === this.bossNameKey && locale === this.bossNameLocale) return;
+    this.bossNameKey = name;
+    this.bossNameLocale = locale;
+    this.bossName.setText(name ? t(name) : '');
   }
 
   private createCurrency() {

@@ -4,6 +4,7 @@ export const enUS = {
   'floor.label': 'Floor {n}',
   'enemy.shadow': 'Shadow',
   'boss.shadow-colossus': 'Shadow Colossus',
+  'boss-intro.skip': 'Enter to skip',
   'death.title': 'Swallowed by the shadows',
   'pause.title': 'Paused',
   'pause.seed': 'seed {seed}',

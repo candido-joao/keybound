@@ -4,6 +4,7 @@ import { loadSettings, parseConsoleParam, saveSettings } from './core/settings';
 import { DebugConsole } from './debug/DebugConsole';
 import { initLocale } from './i18n/apply';
 import { BootScene } from './scenes/BootScene';
+import { BossIntroScene } from './scenes/BossIntroScene';
 import { GameScene } from './scenes/GameScene';
 import { HudScene } from './scenes/HudScene';
 import { PauseScene } from './scenes/PauseScene';
@@ -27,7 +28,7 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: new URLSearchParams(location.search).has('debug') },
   },
-  scene: [BootScene, TitleScene, GameScene, HudScene, PauseScene, SummaryScene],
+  scene: [BootScene, TitleScene, GameScene, HudScene, PauseScene, SummaryScene, BossIntroScene],
 });
 
 // Firefox opens Quick Find on ' and /. The game uses neither, and on ABNT2 ' is the console key itself.
