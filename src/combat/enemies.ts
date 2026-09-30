@@ -176,7 +176,51 @@ export const SHADOW_COLOSSUS: EnemyDef = {
   deathColor: 0x2a2144,
 };
 
-export const ENEMIES: readonly EnemyDef[] = [SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS];
+/**
+ * Same stats and attacks as `base` under another name and look. Placeholders for the
+ * later phases until their own enemies arrive; `texture` is baked by BootScene.
+ */
+function reskin(base: EnemyDef, id: string, name: MessageKey, texture: string, deathColor: number): EnemyDef {
+  return { ...base, id, name, texture, deathColor };
+}
+
+export const CRYSTAL_SENTINEL = reskin(
+  SHADOW,
+  'crystal-sentinel',
+  'enemy.crystal-sentinel',
+  'crystal-sentinel',
+  0x1f4a52,
+);
+export const CRYSTAL_SEER = reskin(SHADOW_CASTER, 'crystal-seer', 'enemy.crystal-seer', 'crystal-seer', 0x2c6670);
+export const CRYSTAL_COLOSSUS = reskin(
+  SHADOW_COLOSSUS,
+  'crystal-colossus',
+  'boss.crystal-colossus',
+  'crystal-sentinel',
+  0x1f4a52,
+);
+
+export const AUTOMATON = reskin(SHADOW, 'automaton', 'enemy.automaton', 'automaton', 0x4a3522);
+export const AUTOMATON_GUNNER = reskin(
+  SHADOW_CASTER,
+  'automaton-gunner',
+  'enemy.automaton-gunner',
+  'automaton-gunner',
+  0x5c4128,
+);
+export const GEAR_COLOSSUS = reskin(SHADOW_COLOSSUS, 'gear-colossus', 'boss.gear-colossus', 'automaton', 0x4a3522);
+
+export const ENEMIES: readonly EnemyDef[] = [
+  SHADOW,
+  SHADOW_CASTER,
+  SHADOW_COLOSSUS,
+  CRYSTAL_SENTINEL,
+  CRYSTAL_SEER,
+  CRYSTAL_COLOSSUS,
+  AUTOMATON,
+  AUTOMATON_GUNNER,
+  GEAR_COLOSSUS,
+];
 
 /** Who can fill a normal room, how often, and from which floor on. */
 export interface RoomEnemy {
@@ -185,19 +229,24 @@ export interface RoomEnemy {
   minDepth: number;
 }
 
-export const ROOM_ENEMIES: readonly RoomEnemy[] = [
+export const CRYPT_ENEMIES: readonly RoomEnemy[] = [
   { def: SHADOW, weight: 3, minDepth: 1 },
   // Floor 1 stays melee only while the player learns to move and shoot.
   { def: SHADOW_CASTER, weight: 1, minDepth: 2 },
 ];
 
-/** `count` enemy kinds for a room on floor `depth`, each rolled by weight among those allowed there. */
-export function rollRoomEnemies(
-  rng: Rng,
-  depth: number,
-  count: number,
-  table: readonly RoomEnemy[] = ROOM_ENEMIES,
-): EnemyDef[] {
+export const GARDEN_ENEMIES: readonly RoomEnemy[] = [
+  { def: CRYSTAL_SENTINEL, weight: 3, minDepth: 1 },
+  { def: CRYSTAL_SEER, weight: 1, minDepth: 1 },
+];
+
+export const CLOCK_TOWER_ENEMIES: readonly RoomEnemy[] = [
+  { def: AUTOMATON, weight: 3, minDepth: 1 },
+  { def: AUTOMATON_GUNNER, weight: 1, minDepth: 1 },
+];
+
+/** `count` enemy kinds from `table` for a room on floor `depth`, each rolled by weight among those allowed there. */
+export function rollRoomEnemies(rng: Rng, depth: number, count: number, table: readonly RoomEnemy[]): EnemyDef[] {
   const allowed = table.filter((e) => depth >= e.minDepth);
   if (allowed.length === 0) return [];
   return Array.from({ length: count }, () => pickWeighted(rng, allowed).def);

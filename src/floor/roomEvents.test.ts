@@ -4,7 +4,6 @@ import { Rng } from '../core/rng';
 import type { RoomType } from './FloorGenerator';
 import {
   EVENT_TUNING,
-  TWIN_NAME,
   altarCost,
   curseStrays,
   cursedDef,
@@ -80,7 +79,7 @@ describe('event tuning', () => {
     expect(twin.hp).toBe(Math.round(SHADOW_COLOSSUS.hp * 0.55));
     expect(twin.scale).toBeCloseTo(SHADOW_COLOSSUS.scale * 0.8);
     expect(twin.contactDamage).toBe(SHADOW_COLOSSUS.contactDamage);
-    expect(twin.name).toBe(TWIN_NAME);
+    expect(twin.name).toBe('boss.shadow-colossus-twins');
   });
 
   it('grows a plain enemy into a mini boss that summons its own kind', () => {

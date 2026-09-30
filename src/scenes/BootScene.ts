@@ -3,6 +3,7 @@ import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
 import { PORTRAIT_KEYHOLE, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
+import { PHASES, floorTexture, wallTexture } from '../floor/phases';
 
 /** Light around the player in a dark room: fully lit inside, fading out to the edge. */
 const DARK_LIGHT_INNER = 50;
@@ -30,17 +31,19 @@ export class BootScene extends Phaser.Scene {
       g.generateTexture(key, w, h);
     };
 
-    bake('floor', TILE, TILE, () => {
-      g.fillStyle(COLORS.floor).fillRect(0, 0, TILE, TILE);
-      g.fillStyle(COLORS.floorAlt).fillRect(2, 2, TILE - 4, TILE - 4);
-      g.fillStyle(COLORS.floor).fillRect(TILE / 2 - 1, 2, 2, TILE - 4);
-    });
-
-    bake('wall', TILE, TILE, () => {
-      g.fillStyle(COLORS.wall).fillRect(0, 0, TILE, TILE);
-      g.lineStyle(2, COLORS.wallEdge).strokeRect(1, 1, TILE - 2, TILE - 2);
-      g.fillStyle(COLORS.wallEdge).fillRect(6, TILE / 2 - 1, TILE - 12, 2);
-    });
+    for (const phase of PHASES) {
+      const { floor, floorAlt, wall, wallEdge } = phase.palette;
+      bake(floorTexture(phase), TILE, TILE, () => {
+        g.fillStyle(floor).fillRect(0, 0, TILE, TILE);
+        g.fillStyle(floorAlt).fillRect(2, 2, TILE - 4, TILE - 4);
+        g.fillStyle(floor).fillRect(TILE / 2 - 1, 2, 2, TILE - 4);
+      });
+      bake(wallTexture(phase), TILE, TILE, () => {
+        g.fillStyle(wall).fillRect(0, 0, TILE, TILE);
+        g.lineStyle(2, wallEdge).strokeRect(1, 1, TILE - 2, TILE - 2);
+        g.fillStyle(wallEdge).fillRect(6, TILE / 2 - 1, TILE - 12, 2);
+      });
+    }
 
     bake('door', TILE, TILE, () => {
       g.fillStyle(0x0c0a16).fillRect(0, 0, TILE, TILE);
@@ -74,19 +77,28 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(COLORS.boltCore).fillCircle(7, 7, 2.5);
     });
 
-    bake('shadow', 32, 32, () => {
-      g.fillStyle(COLORS.shadow).fillEllipse(16, 20, 26, 22);
-      g.fillStyle(COLORS.shadow).fillTriangle(6, 14, 4, 0, 12, 10).fillTriangle(26, 14, 28, 0, 20, 10);
-      g.fillStyle(COLORS.shadowEye).fillCircle(11, 17, 3.2).fillCircle(21, 17, 3.2);
-    });
+    // The later phases' enemies are recolors until their own art arrives.
+    const bakeShadow = (key: string, body: number, eye: number) =>
+      bake(key, 32, 32, () => {
+        g.fillStyle(body).fillEllipse(16, 20, 26, 22);
+        g.fillStyle(body).fillTriangle(6, 14, 4, 0, 12, 10).fillTriangle(26, 14, 28, 0, 20, 10);
+        g.fillStyle(eye).fillCircle(11, 17, 3.2).fillCircle(21, 17, 3.2);
+      });
+    bakeShadow('shadow', COLORS.shadow, COLORS.shadowEye);
+    bakeShadow('crystal-sentinel', 0x173a40, 0x9ff7ff);
+    bakeShadow('automaton', 0x3a2a1a, 0xffa640);
 
-    // Same eye spots as the plain shadow, so the eye glow lines up; hood and pink eyes mark it as a shooter.
-    bake('shadow-caster', 32, 32, () => {
-      g.fillStyle(0x3b2358).fillEllipse(16, 20, 24, 22);
-      g.fillStyle(0x3b2358).fillTriangle(5, 16, 16, -1, 27, 16);
-      g.fillStyle(0x5c3a82).fillTriangle(9, 14, 16, 3, 23, 14);
-      g.fillStyle(0xff5fa2).fillCircle(11, 17, 3).fillCircle(21, 17, 3);
-    });
+    // Same eye spots as the plain shadow, so the eye glow lines up; hood and bright eyes mark it as a shooter.
+    const bakeCaster = (key: string, body: number, hood: number, eye: number) =>
+      bake(key, 32, 32, () => {
+        g.fillStyle(body).fillEllipse(16, 20, 24, 22);
+        g.fillStyle(body).fillTriangle(5, 16, 16, -1, 27, 16);
+        g.fillStyle(hood).fillTriangle(9, 14, 16, 3, 23, 14);
+        g.fillStyle(eye).fillCircle(11, 17, 3).fillCircle(21, 17, 3);
+      });
+    bakeCaster('shadow-caster', 0x3b2358, 0x5c3a82, 0xff5fa2);
+    bakeCaster('crystal-seer', 0x1f4f57, 0x3f8f99, 0xe0fbff);
+    bakeCaster('automaton-gunner', 0x4a3522, 0x8a6a3a, 0xff6f3c);
 
     bake('particle', 8, 8, () => {
       g.fillStyle(0xffffff).fillCircle(4, 4, 4);

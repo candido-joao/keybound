@@ -3,6 +3,7 @@ import { addItemIcon } from '../combat/items';
 import { type Item, countItems } from '../combat/stats';
 import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_H, ROOM_W, ROOM_X, ROOM_Y } from '../config';
 import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
+import { phaseAt } from '../floor/phases';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { HealthTrail } from '../ui/healthTrail';
 import { PORTRAIT_KEYHOLE, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
@@ -218,7 +219,7 @@ export class HudScene extends Phaser.Scene {
     if (depth === this.labelDepth && locale === this.labelLocale) return;
     this.labelDepth = depth;
     this.labelLocale = locale;
-    this.floorLabel.setText(t('floor.label', { n: depth }));
+    this.floorLabel.setText(t('floor.phase-label', { phase: t(phaseAt(depth).name), n: depth }));
   }
 
   private createHealthBar() {
