@@ -101,10 +101,11 @@ export const ptBR = {
   'item.copper-ring:greedy.description': 'Moedas valem o dobro, dano +2%, menos orbes de cura',
   'item.copper-ring:greedy.hint': 'Brilha mais perto do ouro',
   'item.prism-lens.name': 'Lente Prismática',
-  'item.prism-lens.description': 'Projéteis atravessam um inimigo',
+  'item.prism-lens.description': 'Projéteis atravessam um inimigo; feixes se dividem no primeiro inimigo',
   'item.prism-lens.hint': 'A luz passa e segue em frente',
   'item.prism-lens:cracked.name': 'Lente Rachada',
-  'item.prism-lens:cracked.description': 'Projéteis atravessam dois inimigos, dano -15%',
+  'item.prism-lens:cracked.description':
+    'Projéteis atravessam dois inimigos, dano -15%; feixes se dividem no primeiro inimigo',
   'item.prism-lens:cracked.hint': 'A rachadura espalha a luz',
   'item.crystal-heart.name': 'Coração de Cristal',
   'item.crystal-heart.description': 'HP máximo +15, cura total',

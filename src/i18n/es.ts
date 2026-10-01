@@ -103,10 +103,11 @@ export const es = {
   'item.copper-ring:greedy.description': 'Las monedas valen el doble, daño +2%, menos orbes de curación',
   'item.copper-ring:greedy.hint': 'Brilla más cerca del oro',
   'item.prism-lens.name': 'Lente Prismática',
-  'item.prism-lens.description': 'Los proyectiles atraviesan a un enemigo',
+  'item.prism-lens.description': 'Los proyectiles atraviesan a un enemigo; los rayos se dividen en el primer enemigo',
   'item.prism-lens.hint': 'La luz pasa y sigue adelante',
   'item.prism-lens:cracked.name': 'Lente Agrietada',
-  'item.prism-lens:cracked.description': 'Los proyectiles atraviesan a dos enemigos, daño -15%',
+  'item.prism-lens:cracked.description':
+    'Los proyectiles atraviesan a dos enemigos, daño -15%; los rayos se dividen en el primer enemigo',
   'item.prism-lens:cracked.hint': 'La grieta dispersa la luz',
   'item.crystal-heart.name': 'Corazón de Cristal',
   'item.crystal-heart.description': 'PV máximos +15, curación total',
