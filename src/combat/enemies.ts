@@ -153,7 +153,7 @@ export const SHADOW: EnemyDef = {
   id: 'shadow',
   name: 'enemy.shadow',
   texture: 'shadow',
-  frames: 1,
+  frames: 3,
   hp: 12,
   hpGrowth: 0.15,
   speed: 115,
