@@ -130,7 +130,10 @@ export function miniBossDef(def: EnemyDef): EnemyDef {
     contactDamage: Math.round(def.contactDamage * damageScale),
     miniBoss: true,
     outline,
-    attacks: [...def.attacks, { kind: 'summon', ...summon, minionId: def.id }],
+    attacks: [
+      ...def.attacks.filter((attack) => attack.kind !== 'explode'),
+      { kind: 'summon', ...summon, minionId: def.id },
+    ],
   };
 }
 

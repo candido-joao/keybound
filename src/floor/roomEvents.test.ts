@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS, findAttack } from '../combat/enemies';
+import { CUCKOO, SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS, findAttack } from '../combat/enemies';
 import { Rng } from '../core/rng';
 import type { RoomType } from './FloorGenerator';
 import { PHASES } from './phases';
@@ -105,6 +105,17 @@ describe('event tuning', () => {
     const elder = miniBossDef(SHADOW_CASTER);
     expect(findAttack(elder, 'volley')).toBeDefined();
     expect(findAttack(elder, 'summon')?.minionId).toBe('shadow-caster');
+  });
+
+  it('makes a cuckoo mini boss summon without exploding', () => {
+    const elder = miniBossDef(CUCKOO);
+    expect(findAttack(elder, 'explode')).toBeUndefined();
+    expect(findAttack(elder, 'summon')).toEqual({
+      kind: 'summon',
+      ...EVENT_TUNING.miniboss.summon,
+      minionId: CUCKOO.id,
+    });
+    expect(findAttack(CUCKOO, 'explode')).toBeDefined();
   });
 
   it('prices the altar at a quarter of the current max HP', () => {
