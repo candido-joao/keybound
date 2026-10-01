@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, GAME_W } from '../config';
 import { SEED_MAX_LENGTH, normalizeSeed } from '../core/rng';
 import { newRun } from '../core/run';
+import { KEY_TITLE_ART } from '../entities/Player';
 import { LOCALE_NAMES, getLocale, nextLocale, t } from '../i18n';
 import { chooseLocale } from '../i18n/apply';
 
@@ -27,10 +28,7 @@ export class TitleScene extends Phaser.Scene {
     const cx = GAME_W / 2;
     const style = { fontFamily: 'monospace', color: COLORS.text, stroke: '#000', strokeThickness: 4 };
 
-    this.add
-      .image(cx + 150, 118, 'key')
-      .setScale(2.5)
-      .setAngle(-35);
+    this.addTitleKey(cx, 110);
     this.add.text(cx, 110, 'KEYBOUND', { ...style, fontSize: '56px', strokeThickness: 6 }).setOrigin(0.5);
     this.add.text(cx, 160, t('title.tagline'), { ...style, fontSize: '15px', color: COLORS.textDim }).setOrigin(0.5);
 
@@ -62,6 +60,15 @@ export class TitleScene extends Phaser.Scene {
     // Key capture stops Tab from moving browser focus.
     keyboard.addKey('TAB');
     keyboard.on('keydown', (event: KeyboardEvent) => this.onKey(event));
+  }
+
+  /** Behind the logo's last letters; the art comes tilted, the baked key has to be turned. */
+  private addTitleKey(cx: number, y: number): Phaser.GameObjects.Image {
+    if (this.textures.exists(KEY_TITLE_ART)) return this.add.image(cx + 190, y, KEY_TITLE_ART).setScale(0.75);
+    return this.add
+      .image(cx + 150, y + 8, 'key')
+      .setScale(2.5)
+      .setAngle(-35);
   }
 
   private onKey(event: KeyboardEvent) {

@@ -25,6 +25,9 @@ export interface KeyholeOutline {
 /** Keyhole behind the HUD portrait; the HP gauge traces it. */
 export const PORTRAIT_KEYHOLE: KeyholeShape = { headRadius: 20, stemAngle: 0.45, stemHalfWidth: 10, stemBottom: 31 };
 
+/** Equipped key's frame, beside the portrait; same fill and border as the keyhole. */
+export const WEAPON_SLOT = { size: 40, cornerRadius: 7 };
+
 export function keyholeOutline(shape: KeyholeShape, offset: number): KeyholeOutline {
   const { headRadius, stemAngle, stemHalfWidth, stemBottom } = shape;
   const radius = headRadius + offset;

@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { RangeTrigger, fanAngles } from './volley';
+import { RangeTrigger, fanAngles, shotsInDirection } from './volley';
+
+describe('shotsInDirection', () => {
+  const split = (shotCount: number, echoShots: number) =>
+    Array.from({ length: 1 + echoShots }, (_, d) => shotsInDirection(d, shotCount, echoShots));
+
+  it('keeps the whole fan forward without echoes', () => {
+    expect(split(5, 0)).toEqual([5]);
+  });
+
+  it('deals the extra shots out, aim first', () => {
+    expect(split(3, 1)).toEqual([2, 2]);
+    expect(split(5, 1)).toEqual([3, 3]);
+    expect(split(3, 3)).toEqual([2, 2, 1, 1]);
+    expect(split(5, 3)).toEqual([2, 2, 2, 2]);
+  });
+
+  it('never changes the total', () => {
+    for (const [shots, echoes] of [
+      [1, 1],
+      [3, 1],
+      [5, 3],
+      [7, 3],
+    ]) {
+      expect(split(shots, echoes).reduce((a, b) => a + b, 0)).toBe(shots + echoes);
+    }
+  });
+});
 
 describe('fanAngles', () => {
   it('centers the fan on the aim', () => {

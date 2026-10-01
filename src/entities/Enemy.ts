@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { KNOCKBACK } from '../combat/balance';
 import {
   type DashAttack,
   type EnemyDef,
@@ -38,6 +39,12 @@ export type OrbShooter = (x: number, y: number, angle: number, speed: number, da
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   hp: number;
   readonly def: EnemyDef;
+  /** Set by GameScene from the player's items: scales walking and dashing, not the fury's fixed path. */
+  speedScale = 1;
+  /** Clock time from which a hit may start an arc chain again. */
+  chainReadyAt = 0;
+  /** Damage it takes if the current push slams it into a wall. */
+  private pendingSlam = 0;
   private clock: GameClock;
   private activeAt: number;
   private dash?: DashAttack;
@@ -144,7 +151,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
     const wobble = Math.sin((time + this.wobbleSeed) / 180) * 0.6;
-    const speed = this.def.speed;
+    const speed = this.def.speed * this.speedScale;
     body.setVelocity(Math.cos(angle + wobble) * speed, Math.sin(angle + wobble) * speed);
     this.setFlipX(body.velocity.x < 0);
   }
@@ -274,24 +281,47 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private launchDash(dash: DashAttack) {
     this.dashLaunchAt = Infinity;
     const angle = Phaser.Math.Angle.Between(this.x, this.y, this.dashTargetX, this.dashTargetY);
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * dash.speed, Math.sin(angle) * dash.speed);
+    const speed = dash.speed * this.speedScale;
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
-  /** Returns true when this hit killed it. Invulnerable during the fury transition. */
-  hit(damage: number, fromX: number, fromY: number): boolean {
+  /**
+   * Returns true when this hit killed it. Invulnerable during the fury transition.
+   * `knockback` scales the push away from (`fromX`, `fromY`); 0 doesn't push. If the push
+   * drives it into a wall, it takes `slamShare` of the damage again (see `slammed`).
+   */
+  hit(damage: number, fromX: number, fromY: number, knockback = 1, slamShare = 0): boolean {
     if (this.furyState === 'transition') return false;
     const before = this.hp;
     this.hp -= damage;
     if (this.hp > 0 && crossesFury(this.def, before, this.hp)) this.startFury();
     this.setTintMode(Phaser.TintModes.FILL).setTint(0xffffff);
     this.scene.time.delayedCall(70, () => this.active && this.restoreTint());
-
-    if (!this.def.boss && !this.def.miniBoss) {
-      const angle = Phaser.Math.Angle.Between(fromX, fromY, this.x, this.y);
-      (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * 220, Math.sin(angle) * 220);
-      this.knockedUntil = this.clock.now + 110;
-    }
+    if (knockback <= 0 || this.def.boss || this.def.miniBoss) return this.hp <= 0;
+    this.knockFrom(fromX, fromY, knockback);
+    this.pendingSlam = damage * slamShare;
     return this.hp <= 0;
+  }
+
+  /**
+   * Damage owed for being pushed into a wall, once per push; 0 if none. Arcade marks a body
+   * blocked when it runs into a static one, and walls and closed doors are the only static
+   * bodies an enemy collides with.
+   */
+  slammed(): number {
+    const owed = this.pendingSlam;
+    if (owed <= 0 || this.clock.now >= this.knockedUntil) return 0;
+    if ((this.body as Phaser.Physics.Arcade.Body).blocked.none) return 0;
+    this.pendingSlam = 0;
+    return owed;
+  }
+
+  /** Stronger pushes also last a little longer, so they carry the enemy farther. */
+  private knockFrom(fromX: number, fromY: number, scale: number) {
+    const angle = Phaser.Math.Angle.Between(fromX, fromY, this.x, this.y);
+    const speed = KNOCKBACK.speed * scale;
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    this.knockedUntil = this.clock.now + KNOCKBACK.ms * Math.max(1, Math.sqrt(scale));
   }
 
   /** Straight into fury, whatever the HP: a twin whose partner fell. */

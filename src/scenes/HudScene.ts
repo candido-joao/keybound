@@ -6,8 +6,8 @@ import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
 import { phaseAt } from '../floor/phases';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { HealthTrail } from '../ui/healthTrail';
-import { PORTRAIT_KEYHOLE, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
-import type { Player } from '../entities/Player';
+import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
+import { HERO_PORTRAIT_ART, KEY_ICON_ART, type Player } from '../entities/Player';
 import type { GameScene } from './GameScene';
 
 interface MapLayout {
@@ -67,6 +67,11 @@ const GAUGE_LENGTH = gaugeLength(GAUGE_OUTLINE, HP_BAR_LENGTH);
 const GAUGE_TEXTURE_W = GAUGE_X + HP_BAR_LENGTH + 40;
 const GAUGE_TEXTURE_H = GAUGE_Y + PORTRAIT_KEYHOLE.stemBottom + 20;
 
+// Equipped key right of the portrait, level with its head and clear of the gauge around it.
+const SLOT_GAP = 6;
+const SLOT_X = GAUGE_X + GAUGE_OUTLINE.radius + HP_THICKNESS / 2 + SLOT_GAP + WEAPON_SLOT.size / 2;
+const SLOT_Y = GAUGE_Y;
+
 /** Runs on top of GameScene and reads its state every frame. */
 export class HudScene extends Phaser.Scene {
   private map!: Phaser.GameObjects.Graphics;
@@ -99,6 +104,7 @@ export class HudScene extends Phaser.Scene {
 
   create() {
     this.createHealthBar();
+    this.createWeaponSlot();
     // Above the HP bar and icons, so the expanded map's backdrop dims them too.
     this.map = this.add.graphics().setDepth(10);
     this.icons = [];
@@ -222,6 +228,17 @@ export class HudScene extends Phaser.Scene {
     this.floorLabel.setText(t('floor.phase-label', { phase: t(phaseAt(depth).name), n: depth }));
   }
 
+  /** Fixed while there's only one key; drawn once. */
+  private createWeaponSlot() {
+    this.add.image(SLOT_X, SLOT_Y, 'weapon-slot');
+    if (this.textures.exists(KEY_ICON_ART)) {
+      this.add.image(SLOT_X, SLOT_Y, KEY_ICON_ART);
+      return;
+    }
+    // The baked key is long and flat: laid on the diagonal it fits the square.
+    this.add.image(SLOT_X, SLOT_Y, 'key').setAngle(-45).setScale(0.75);
+  }
+
   private createHealthBar() {
     this.gauge = this.textures.exists('hp-gauge')
       ? (this.textures.get('hp-gauge') as Phaser.Textures.CanvasTexture)
@@ -230,12 +247,14 @@ export class HudScene extends Phaser.Scene {
     // Pivot on the keyhole's round head, which BootScene draws 2px below the top.
     const frame = this.add.image(GAUGE_X, GAUGE_Y, 'portrait-frame');
     frame.setOrigin(0.5, (PORTRAIT_KEYHOLE.headRadius + 2) / frame.height);
+    this.trackedPlayer = null;
+    // BootScene already drew the hero's face into the frame.
+    if (this.textures.exists(HERO_PORTRAIT_ART)) return;
     // Head and hair of the player sprite, centered in the keyhole's head.
     this.add
       .image(GAUGE_X, GAUGE_Y + 7, 'player')
       .setCrop(5, 0, 23, 23)
       .setScale(1.3);
-    this.trackedPlayer = null;
   }
 
   /** Redraws only when health, max health or the damage trail changed. */
