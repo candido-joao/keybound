@@ -22,6 +22,7 @@ export class TitleScene extends Phaser.Scene {
     super('title');
   }
 
+  /** Build the localized title screen, restore the typed seed, and register its keyboard shortcuts. */
   create(data: TitleData) {
     this.seedInput = data.seedInput ?? '';
     this.cursorOn = true;
@@ -46,7 +47,7 @@ export class TitleScene extends Phaser.Scene {
 
     this.add.text(cx, 470, t('title.controls'), { ...style, fontSize: '13px', color: COLORS.textDim }).setOrigin(0.5);
     this.add
-      .text(cx, 500, t('title.language', { language: LOCALE_NAMES[getLocale()] }), {
+      .text(cx, 500, `${t('title.language', { language: LOCALE_NAMES[getLocale()] })}   ·   ${t('title.wiki')}`, {
         ...style,
         fontSize: '13px',
         color: COLORS.textMuted,
@@ -57,8 +58,9 @@ export class TitleScene extends Phaser.Scene {
     this.time.addEvent({ delay: CURSOR_BLINK_MS, loop: true, callback: () => this.blink() });
 
     const keyboard = this.input.keyboard!;
-    // Key capture stops Tab from moving browser focus.
+    // Key capture stops Tab from moving browser focus, and F1 from opening the browser's help.
     keyboard.addKey('TAB');
+    keyboard.addKey('F1');
     keyboard.on('keydown', (event: KeyboardEvent) => this.onKey(event));
   }
 
@@ -71,9 +73,11 @@ export class TitleScene extends Phaser.Scene {
       .setAngle(-35);
   }
 
+  /** Dispatch title shortcuts or normalize seed input while respecting the seed length limit. */
   private onKey(event: KeyboardEvent) {
     if (event.key === 'Enter') return this.startRun();
     if (event.key === 'Tab') return this.cycleLocale();
+    if (event.key === 'F1') return this.openWiki();
     if (event.key === 'Backspace') return this.setSeedInput(this.seedInput.slice(0, -1));
     if (event.key.length !== 1 || this.seedInput.length >= SEED_MAX_LENGTH) return;
     this.setSeedInput(normalizeSeed(this.seedInput + event.key));
@@ -102,6 +106,11 @@ export class TitleScene extends Phaser.Scene {
   private cycleLocale() {
     chooseLocale(nextLocale(getLocale()));
     this.scene.restart({ seedInput: this.seedInput } satisfies TitleData);
+  }
+
+  /** In a new tab, so the title and its typed seed are still here on the way back. */
+  private openWiki() {
+    window.open(`${import.meta.env.BASE_URL}wiki/`, '_blank', 'noopener');
   }
 
   private startRun() {

@@ -57,6 +57,7 @@ export const ptBR = {
   'title.start': 'Enter para começar',
   'title.controls': 'WASD mover   ·   Setas atirar   ·   Tab mapa   ·   Esc pausa',
   'title.language': 'Tab idioma: {language}',
+  'title.wiki': 'F1 wiki',
 
   'summary.floor': 'Chegou ao andar {n}',
   'summary.victory': 'Venceu os {n} andares',
@@ -179,6 +180,68 @@ export const ptBR = {
   'item.spark-coil:storm.name': 'Tempestade',
   'item.spark-coil:storm.description': 'Acertos dão choque em todos ao redor, dano -20%',
   'item.spark-coil:storm.hint': 'O ar pesa antes do raio',
+
+  'wiki.title': 'Keybound · Wiki',
+  'wiki.tagline': 'Wiki',
+  'wiki.play': 'Jogar',
+  'wiki.nav.phases': 'Fases',
+  'wiki.nav.enemies': 'Inimigos',
+  'wiki.nav.items': 'Itens',
+  'wiki.nav.events': 'Salas especiais',
+  'wiki.footer': 'Gerada dos próprios dados do jogo: está sempre na versão que você joga.',
+  'wiki.floor-range': 'Andares {first}–{last}',
+  'wiki.phases.intro':
+    'Uma run tem {floors} andares, em {phases} fases. Cada andar tem uma sala do tesouro e uma sala do boss; vencer o boss abre o portal para o próximo andar, e o do último andar encerra a run.',
+  'wiki.phase.enemies': 'Inimigos',
+  'wiki.phase.boss': 'Boss',
+  'wiki.phase.items': 'Novos itens a partir do andar {n}',
+  'wiki.enemies.intro':
+    'O HP de cada inimigo cresce a cada andar. Inimigos comuns atacam sem aviso; só os bosses avisam antes de atacar.',
+  'wiki.enemy.hp': 'HP',
+  'wiki.enemy.hp-growth': '+{pct}% por andar',
+  'wiki.enemy.speed': 'Velocidade',
+  'wiki.enemy.speed-value': '{pct}% da sua',
+  'wiki.enemy.contact': 'Dano ao tocar',
+  'wiki.enemy.from': 'A partir do andar {n}',
+  'wiki.attack.dash': 'Investida a cada {s}s, anunciada {ms}ms antes',
+  'wiki.attack.charge': 'Quando você se alinha na linha ou coluna dele, avança reto até a parede',
+  'wiki.attack.volley.single': 'Atira um orbe ({damage} de dano) quando você fica longe',
+  'wiki.attack.volley.burst': 'Rajada de {shots} tiros mirados ({damage} de dano cada)',
+  'wiki.attack.volley.fan': 'Leque de {count} orbes ({damage} de dano cada) quando você fica longe',
+  'wiki.attack.volley.ring': 'Anel de {count} orbes em todas as direções ({damage} de dano cada)',
+  'wiki.attack.summon': 'Invoca {min}–{max} cópias de {name}',
+  'wiki.attack.explode': 'Para perto de você e explode: {damage} de dano em área, inimigos inclusos',
+  'wiki.trait.boss': 'Tiros não o empurram',
+  'wiki.trait.revive': 'Levanta após {s}s com {pct}% do HP, a menos que você pise nos ossos antes',
+  'wiki.trait.fade': 'Some e reaparece; sumido, não causa nem leva dano',
+  'wiki.trait.blink': 'Teleporta para longe quando você chega perto',
+  'wiki.trait.split': 'Ao morrer, se parte em {count}× {name}',
+  'wiki.trait.split-from': 'Surge quando {name} é destruída',
+  'wiki.trait.anchored': 'Fixo no chão: não anda e não é empurrado',
+  'wiki.trait.axis-walk': 'Anda só em linha reta, virando em ângulo reto',
+  'wiki.trait.ghost': 'Atravessa outros inimigos',
+  'wiki.trait.fury':
+    'Abaixo de {pct}% do HP entra em fúria: investidas que ricocheteiam nas paredes ({damage} de dano)',
+  'wiki.items.intro':
+    'Itens aparecem na sala do tesouro e depois de cada boss, e seus efeitos acumulam. Muitos têm variantes com o mesmo ícone: só dá para saber qual é pela dica no pedestal, ou pegando.',
+  'wiki.item.from': 'A partir do andar {n}',
+  'wiki.item.max-copies': 'Até {n} cópias',
+  'wiki.item.odds': '{pct}% de chance',
+  'wiki.item.variants': 'Variantes',
+  'wiki.events.intro': 'Algumas salas sorteiam um evento: {normal}% das salas comuns e {boss}% das salas do boss.',
+  'wiki.event.dark.name': 'Sala escura',
+  'wiki.event.dark.text':
+    'A luz se apaga e os inimigos vêm em {min} a {max} ondas. Cada onda vencida faz chover moedas e orbes de cura.',
+  'wiki.event.cursed.text':
+    'Inimigos maiores, contornados em roxo, com {hp}% do HP; os drops são sorteados duas vezes. A partir do andar {floor}, cada inimigo comum tem {pct}% de chance de vir amaldiçoado.',
+  'wiki.event.altar.text':
+    'Um item em troca de {pct}% do seu HP máximo, tirado também do HP atual. Pagar sem vida suficiente mata.',
+  'wiki.event.timed.text': 'Limpe a sala a tempo: {base}s mais {per}s por andar, até {max}s.',
+  'wiki.event.miniboss.name': 'Ancião',
+  'wiki.event.miniboss.text':
+    'Um inimigo comum cresce: HP ×{hp}, dano ×{damage}, e invoca cópias de si. Vencido, faz chover moedas e cura; às vezes ({pct}%) deixa um item.',
+  'wiki.event.twin.name': 'Gêmeos',
+  'wiki.event.twin.text': 'O boss do andar vem em dupla, cada um com {pct}% do HP e o dano cheio.',
 } as const;
 
 export type MessageKey = keyof typeof ptBR;

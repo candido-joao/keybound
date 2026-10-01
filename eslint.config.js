@@ -10,6 +10,7 @@ const PURE_LOGIC = [
   'src/combat/drops.ts',
   'src/combat/enemies.ts',
   'src/combat/itemPool.ts',
+  'src/combat/placeholderArt.ts',
   'src/combat/ricochet.ts',
   'src/combat/stats.ts',
   'src/combat/volley.ts',
@@ -20,6 +21,7 @@ const PURE_LOGIC = [
   'src/floor/**',
   'src/i18n/**',
   'src/ui/healthTrail.ts',
+  'src/wiki/catalog.ts',
 ];
 
 export default defineConfig(
