@@ -29,7 +29,7 @@ export function enemySprite(def: EnemyDef): HTMLCanvasElement {
   canvas.className = 'sprite';
   canvas.width = ENEMY_FRAME * ZOOM;
   canvas.height = ENEMY_FRAME * ZOOM;
-  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-hidden', 'true');
   const entry: Animated = { canvas, def };
   animated.push(entry);
   if (!def.frames) {
