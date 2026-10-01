@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../core/rng';
 import {
+  CRYPT_ENEMIES,
   SHADOW,
   SHADOW_CASTER,
   SHADOW_COLOSSUS,
@@ -33,17 +34,17 @@ describe('crossesFury', () => {
 
 describe('rollRoomEnemies', () => {
   it('keeps floor 1 to plain shadows', () => {
-    expect(new Set(rollRoomEnemies(new Rng('f1'), 1, 200))).toEqual(new Set([SHADOW]));
+    expect(new Set(rollRoomEnemies(new Rng('f1'), 1, 200, CRYPT_ENEMIES))).toEqual(new Set([SHADOW]));
   });
 
   it('mixes in casters from floor 2', () => {
-    const kinds = rollRoomEnemies(new Rng('f2'), 2, 200);
+    const kinds = rollRoomEnemies(new Rng('f2'), 2, 200, CRYPT_ENEMIES);
     expect(kinds).toContain(SHADOW_CASTER);
     expect(kinds.filter((d) => d === SHADOW).length).toBeGreaterThan(kinds.filter((d) => d === SHADOW_CASTER).length);
   });
 
   it('is the same for the same seed', () => {
-    const ids = () => rollRoomEnemies(new Rng('same'), 3, 6).map((d) => d.id);
+    const ids = () => rollRoomEnemies(new Rng('same'), 3, 6, CRYPT_ENEMIES).map((d) => d.id);
     expect(ids()).toEqual(ids());
   });
 

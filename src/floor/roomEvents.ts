@@ -51,12 +51,21 @@ export const EVENT_TUNING = {
   twin: { hpShare: 0.55, scale: 0.8, desyncMs: 1000, rain: { currency: 8, heal: 2 } },
 } as const;
 
-export const TWIN_NAME: MessageKey = 'boss.shadow-colossus-twins';
+/** Twins' name, by the boss they split from. */
+const TWIN_NAMES: Record<string, MessageKey> = {
+  'shadow-colossus': 'boss.shadow-colossus-twins',
+  'crystal-colossus': 'boss.crystal-colossus-twins',
+  'gear-colossus': 'boss.gear-colossus-twins',
+};
 
 /** A mini boss's name, by the plain enemy it grew from. */
 const ELDER_NAMES: Record<string, MessageKey> = {
   shadow: 'enemy.shadow-elder',
   'shadow-caster': 'enemy.shadow-caster-elder',
+  'crystal-sentinel': 'enemy.crystal-sentinel-elder',
+  'crystal-seer': 'enemy.crystal-seer-elder',
+  automaton: 'enemy.automaton-elder',
+  'automaton-gunner': 'enemy.automaton-gunner-elder',
 };
 
 /** Events for this floor, rolled once when it is generated. Same seed, same events. */
@@ -133,7 +142,7 @@ export function miniBossRain(): DropKind[] {
 /** Smaller and frailer than a lone Colossus, with full damage. */
 export function twinDef(def: EnemyDef): EnemyDef {
   const { hpShare, scale } = EVENT_TUNING.twin;
-  return { ...def, name: TWIN_NAME, hp: Math.round(def.hp * hpShare), scale: def.scale * scale };
+  return { ...def, name: TWIN_NAMES[def.id] ?? def.name, hp: Math.round(def.hp * hpShare), scale: def.scale * scale };
 }
 
 /** Max HP the altar takes from a player with `maxHealth`. */

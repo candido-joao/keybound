@@ -9,7 +9,7 @@ import type { GameScene } from './GameScene';
 /** Keeps a key still held from the fight from skipping the summary. */
 const INPUT_DELAY_MS = 600;
 
-/** End-of-run overlay launched by GameScene on death; the frozen run stays visible underneath. */
+/** End-of-run overlay launched by GameScene on death or victory; the frozen run stays visible underneath. */
 export class SummaryScene extends Phaser.Scene {
   /** scene.stop only lands next step; without this, Enter and R in one frame would both run. */
   private leaving = false;
@@ -26,9 +26,13 @@ export class SummaryScene extends Phaser.Scene {
     const style = { fontFamily: 'monospace', color: COLORS.text, stroke: '#000', strokeThickness: 4 };
 
     this.add.rectangle(0, 0, GAME_W, GAME_H, 0x000000, 0.7).setOrigin(0);
-    this.add.text(cx, 110, t(game.deathTitle), { ...style, fontSize: '30px', strokeThickness: 5 }).setOrigin(0.5);
+    this.add.text(cx, 110, t(game.endTitle), { ...style, fontSize: '30px', strokeThickness: 5 }).setOrigin(0.5);
     this.add
-      .text(cx, 158, t('summary.floor', { n: game.depth }), { ...style, fontSize: '18px', color: COLORS.textDim })
+      .text(cx, 158, t(game.won ? 'summary.victory' : 'summary.floor', { n: game.depth }), {
+        ...style,
+        fontSize: '18px',
+        color: COLORS.textDim,
+      })
       .setOrigin(0.5);
 
     const line = [

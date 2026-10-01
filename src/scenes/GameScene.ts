@@ -19,14 +19,7 @@ import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, rollDrops } from '../combat/drops';
-import {
-  ENEMIES,
-  type EnemyDef,
-  SHADOW_COLOSSUS,
-  type SummonAttack,
-  enemyForDepth,
-  rollRoomEnemies,
-} from '../combat/enemies';
+import { ENEMIES, type EnemyDef, type SummonAttack, enemyForDepth, rollRoomEnemies } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
@@ -37,6 +30,15 @@ import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { HostileOrb } from '../entities/HostileOrb';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
+import {
+  type PhaseDef,
+  floorTexture,
+  isFinalFloor,
+  isPhaseStart,
+  phaseAt,
+  rollFloorBoss,
+  wallTexture,
+} from '../floor/phases';
 import {
   EVENT_TUNING,
   type RoomEventId,
@@ -89,6 +91,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   seed!: string;
   seeded!: boolean;
   depth!: number;
+  phase!: PhaseDef;
+  /** This floor's boss, rolled from the phase's group. */
+  private boss!: EnemyDef;
   floor!: Floor;
   room!: RoomNode;
   items: Item[] = [];
@@ -144,8 +149,10 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   private transitioning = false;
   private gameOver = false;
   private bannerTexts: Phaser.GameObjects.Text[] = [];
-  /** What the run summary says killed the player. */
-  deathTitle: MessageKey = 'death.title';
+  /** The run summary's title: what killed the player, or the victory. */
+  endTitle: MessageKey = 'death.title';
+  /** The final floor's boss fell and the player took its portal. */
+  won = false;
   /** The boss intro holds the clock and physics until it ends. */
   private inBossIntro = false;
   /** Summed over every living boss in the room; `max` 0 when there is none. Refreshed each frame for the HUD. */
@@ -159,6 +166,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.seed = data.seed;
     this.seeded = data.seeded;
     this.depth = data.depth;
+    this.phase = phaseAt(this.depth);
+    this.boss = rollFloorBoss(new Rng(`${this.seed}:boss:${this.depth}`), this.phase);
     this.kills = data.stats.kills;
     this.roomsCleared = data.stats.roomsCleared;
     this.pastTimeMs = data.stats.timeMs;
@@ -173,7 +182,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.bossHealth.max = 0;
     this.roomDecor = [];
     this.bannerTexts = [];
-    this.deathTitle = 'death.title';
+    this.endTitle = 'death.title';
+    this.won = false;
     this.pedestals = [];
     this.drops = [];
     this.leftDrops = new Map();
@@ -202,7 +212,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.roomItems = new Map();
     rewardRooms.forEach((room, i) => rewards[i] && this.roomItems.set(room, rewards[i]));
 
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    this.cameras.main.setBackgroundColor(this.phase.palette.background);
     this.walls = this.physics.add.staticGroup();
     this.doorBlocks = this.physics.add.staticGroup();
     this.enemies = this.physics.add.group();
@@ -217,12 +227,22 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
     this.setupCollisions();
     this.enterRoom(this.floor.start);
-    this.showBanner(t('floor.label', { n: this.depth }));
+    this.showFloorBanner();
 
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
     this.scene.bringToTop('hud');
 
     this.input.keyboard!.on('keydown-ESC', () => this.pause());
+  }
+
+  /** A new phase is announced by name, with the floor under it. */
+  private showFloorBanner() {
+    const floor = t('floor.label', { n: this.depth });
+    if (isPhaseStart(this.depth)) {
+      this.showBanner(t(this.phase.name), floor);
+      return;
+    }
+    this.showBanner(floor);
   }
 
   /** False mid room change or after death, when overlays must not open. */
@@ -380,12 +400,17 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
   private spawnBossRewards(room: RoomNode) {
     this.spawnPortal();
+    // The last portal ends the run, so there is nothing left to use an item on.
+    if (isFinalFloor(this.depth)) return;
     // Above the portal, so walking in to grab it doesn't drop the player into the next floor.
     if (!room.itemTaken) this.spawnItem(room, DOOR_ROW - 2);
   }
 
   private buildLayout(room: RoomNode) {
-    const floor = this.add.tileSprite(ROOM_X, ROOM_Y, ROOM_W, ROOM_H, 'floor').setOrigin(0).setDepth(0);
+    const floor = this.add
+      .tileSprite(ROOM_X, ROOM_Y, ROOM_W, ROOM_H, floorTexture(this.phase))
+      .setOrigin(0)
+      .setDepth(0);
     if (isCursed(room)) floor.setTint(CURSED_FLOOR_TINT);
     this.roomDecor.push(floor);
 
@@ -405,7 +430,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
         const door = doorAt(col, row);
         if (!door) {
-          this.walls.create(tileX(col), tileY(row), 'wall').setDepth(1);
+          this.walls.create(tileX(col), tileY(row), wallTexture(this.phase)).setDepth(1);
           continue;
         }
 
@@ -427,7 +452,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
   private spawnEnemies(room: RoomNode) {
     if (room.type === 'boss') {
-      const boss = enemyForDepth(SHADOW_COLOSSUS, this.depth);
+      const boss = enemyForDepth(this.boss, this.depth);
       this.spawnEnemy(boss, tileX(DOOR_COL), tileY(DOOR_ROW - 1));
       this.startBossIntro(boss, tileX(DOOR_COL), tileY(DOOR_ROW - 1));
       return;
@@ -441,14 +466,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const suffix = wave > 0 ? `:w${wave}` : '';
     const rng = new Rng(`${this.seed}:room:${this.depth}:${room.x},${room.y}${suffix}`);
     const { min, max } = enemiesPerRoom(this.depth);
-    const kinds = rollRoomEnemies(rng, this.depth, rng.int(min, max));
+    const kinds = rollRoomEnemies(rng, this.depth, rng.int(min, max), this.phase.enemies);
     const defs = kinds.map((def) => enemyForDepth(def, this.depth));
     this.spawnPack(transform ? defs.map(transform) : curseStrays(rng, defs, this.depth), rng);
   }
 
   spawnMiniBoss(room: RoomNode) {
     const rng = new Rng(`${this.seed}:miniboss:${this.depth}:${room.x},${room.y}`);
-    const [kind] = rollRoomEnemies(rng, this.depth, 1);
+    const [kind] = rollRoomEnemies(rng, this.depth, 1, this.phase.enemies);
     const def = miniBossDef(enemyForDepth(kind, this.depth));
     this.spawnPack([def], rng);
     this.showBanner(t(def.name));
@@ -478,9 +503,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     }
   };
 
-  /** Two smaller Colossi a few tiles apart, their attacks out of step. */
+  /** Two smaller copies of the floor's boss a few tiles apart, their attacks out of step. */
   spawnTwins() {
-    const def = twinDef(enemyForDepth(SHADOW_COLOSSUS, this.depth));
+    const def = twinDef(enemyForDepth(this.boss, this.depth));
     const y = tileY(DOOR_ROW - 1);
     this.spawnEnemy(def, tileX(DOOR_COL - 2), y);
     this.spawnEnemy(def, tileX(DOOR_COL + 2), y).delayAttacks(EVENT_TUNING.twin.desyncMs);
@@ -833,6 +858,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   private nextFloor() {
+    if (isFinalFloor(this.depth)) {
+      this.won = true;
+      this.endRun('victory.title');
+      return;
+    }
     this.transitioning = true;
     this.cameras.main.fadeOut(400, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
@@ -892,7 +922,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
         this.refreshStats();
       },
       spawn: (enemyId, count) => this.debugSpawn(enemyId, count),
-      spawnBoss: () => this.debugSpawn(SHADOW_COLOSSUS.id, 1),
+      spawnBoss: () => this.debugSpawn(this.boss.id, 1),
       drop: (dropId, count) => this.debugDrop(dropId, count),
       killAll: () => this.debugKillAll(),
       setEnemyHealth: (percent) => this.debugEnemyHealth(percent),
@@ -979,10 +1009,15 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   // ---------------------------------------------------------------- feedback
 
   private onDeath(title: MessageKey = 'death.title') {
-    this.deathTitle = title;
+    this.player.setTint(0x555555);
+    this.endRun(title);
+  }
+
+  /** Freezes the run under the summary overlay. */
+  private endRun(title: MessageKey) {
+    this.endTitle = title;
     this.gameOver = true;
     this.physics.pause();
-    this.player.setTint(0x555555);
     this.scene.launch('summary');
     this.scene.bringToTop('summary');
   }
