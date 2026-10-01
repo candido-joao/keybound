@@ -669,11 +669,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const range = DROP_PICKUP_RADIUS * DROP_PICKUP_RADIUS;
     const pull = DROP_MAGNET_RADIUS * DROP_MAGNET_RADIUS;
     const player = this.player;
-    const healthFull = player.health >= player.stats.maxHealth;
     // Backwards, so collecting one doesn't skip the next.
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const { kind, image } = this.drops[i];
-      if (!canCollect(kind, healthFull)) continue;
+      // Checked per drop: an earlier orb in this loop can fill HP.
+      if (!canCollect(kind, player.health >= player.stats.maxHealth)) continue;
       const d2 = Phaser.Math.Distance.Squared(image.x, image.y, player.x, player.y);
       if (d2 < range) {
         this.collectDrop(i);
