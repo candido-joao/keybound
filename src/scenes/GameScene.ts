@@ -18,7 +18,7 @@ import {
 import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance';
-import { DROPS, type DropKind, type DropLuck, applyDrop, rollDrops } from '../combat/drops';
+import { DROPS, type DropKind, type DropLuck, applyDrop, canCollect, rollDrops, withBossHeal } from '../combat/drops';
 import { ENEMIES, type EnemyDef, type SummonAttack, enemyForDepth, rollRoomEnemies } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
@@ -71,6 +71,9 @@ const ORB_POOL_SIZE = 40;
 
 /** Drops lie where they fell until the player walks over them. */
 const DROP_PICKUP_RADIUS = 20;
+/** Within this distance a drop slides toward the player: a short reach, so it still takes walking up to it. */
+const DROP_MAGNET_RADIUS = 56;
+const DROP_MAGNET_SPEED = 260;
 /** Drops land around the kill, not stacked on one spot. */
 const DROP_SCATTER = 14;
 
@@ -332,7 +335,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       if (bolt.homing > 0) bolt.steerToward(this.homingTarget(bolt, enemies), dt);
     }
 
-    this.updateDrops();
+    this.updateDrops(dt);
     this.updatePedestalLabels();
     this.eventDirector.update();
 
@@ -578,11 +581,16 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     enemy.die();
     this.kills++;
     const rolls = enemy.def.cursed ? 2 : 1;
-    const kinds: DropKind[] = [];
+    let kinds: DropKind[] = [];
     for (let i = 0; i < rolls; i++) {
       const roll = rollDrops(this.dropRng, this.luck, this.player.stats.healOdds);
       this.luck = roll.luck;
       kinds.push(...roll.drops);
+    }
+    if (enemy.def.boss) {
+      const guaranteed = withBossHeal(kinds, this.luck);
+      kinds = guaranteed.drops;
+      this.luck = guaranteed.luck;
     }
     for (const kind of kinds) this.spawnDrop(kind, x, y);
     this.eventDirector.onDrops(kinds);
@@ -656,12 +664,25 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     return image;
   }
 
-  private updateDrops() {
+  /** Drops close to the player slide in and get picked up; a heal orb at full HP stays put for later. */
+  private updateDrops(dt: number) {
     const range = DROP_PICKUP_RADIUS * DROP_PICKUP_RADIUS;
+    const pull = DROP_MAGNET_RADIUS * DROP_MAGNET_RADIUS;
+    const player = this.player;
     // Backwards, so collecting one doesn't skip the next.
     for (let i = this.drops.length - 1; i >= 0; i--) {
-      const { image } = this.drops[i];
-      if (Phaser.Math.Distance.Squared(image.x, image.y, this.player.x, this.player.y) < range) this.collectDrop(i);
+      const { kind, image } = this.drops[i];
+      // Checked per drop: an earlier orb in this loop can fill HP.
+      if (!canCollect(kind, player.health >= player.stats.maxHealth)) continue;
+      const d2 = Phaser.Math.Distance.Squared(image.x, image.y, player.x, player.y);
+      if (d2 < range) {
+        this.collectDrop(i);
+        continue;
+      }
+      if (d2 >= pull) continue;
+      const distance = Math.sqrt(d2);
+      const step = Math.min(distance, DROP_MAGNET_SPEED * dt) / distance;
+      image.setPosition(image.x + (player.x - image.x) * step, image.y + (player.y - image.y) * step);
     }
   }
 

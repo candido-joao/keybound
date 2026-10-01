@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../core/rng';
 import { DROP_ODDS, HEAL_ORB_HP } from './balance';
-import { FRESH_LUCK, applyDrop, healChance, rollDrops } from './drops';
+import { FRESH_LUCK, applyDrop, canCollect, healChance, rollDrops, withBossHeal } from './drops';
 
 describe('healChance', () => {
   it('starts at the base odds', () => {
@@ -16,6 +16,28 @@ describe('healChance', () => {
   it('adds item bonuses, never below zero', () => {
     expect(healChance(FRESH_LUCK, 0.04)).toBeCloseTo(DROP_ODDS.heal + 0.04);
     expect(healChance(FRESH_LUCK, -1)).toBe(0);
+  });
+});
+
+describe('withBossHeal', () => {
+  it('adds a heal orb and resets the dry streak when none dropped', () => {
+    expect(withBossHeal(['currency'], { healMisses: 4 })).toEqual({ drops: ['currency', 'heal'], luck: FRESH_LUCK });
+  });
+
+  it('adds nothing when one already dropped', () => {
+    const luck = { healMisses: 0 };
+    expect(withBossHeal(['heal'], luck)).toEqual({ drops: ['heal'], luck });
+  });
+});
+
+describe('canCollect', () => {
+  it('leaves heal orbs on the floor at full HP', () => {
+    expect(canCollect('heal', true)).toBe(false);
+    expect(canCollect('heal', false)).toBe(true);
+  });
+
+  it('always takes currency', () => {
+    expect(canCollect('currency', true)).toBe(true);
   });
 });
 
