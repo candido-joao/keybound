@@ -1,12 +1,26 @@
 import Phaser from 'phaser';
 import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
-import { PORTRAIT_KEYHOLE, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
+import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
+import { HERO_PORTRAIT_ART, HERO_SHEET, KEY_ART, KEY_ICON_ART, KEY_TITLE_ART } from '../entities/Player';
+import {
+  HERO_FRAMES_PER_ROW,
+  HERO_FRAME_H,
+  HERO_FRAME_W,
+  HERO_WALK_FPS,
+  heroIdleFrame,
+  heroWalkAnim,
+} from '../entities/heroSheet';
 
 /** Light around the player in a dark room: fully lit inside, fading out to the edge. */
 const DARK_LIGHT_INNER = 50;
 const DARK_LIGHT_OUTER = 120;
+
+/** Drawn width of the portrait art; big enough that the face fills the keyhole's head. */
+const PORTRAIT_ART_WIDTH = 52;
+/** Point between the eyes in public/hero/portrait.png, centered in the keyhole's head. */
+const PORTRAIT_ART_EYES = { x: 80, y: 92 };
 
 /**
  * Placeholder art drawn with Graphics. Real art loads in preload() under its own
@@ -20,9 +34,20 @@ export class BootScene extends Phaser.Scene {
   preload() {
     // Variants reuse their base's icon.
     for (const item of ITEMS) if (!item.base) this.load.image(itemTextureKey(item), `items/${item.id}.png`);
+    this.load.image(KEY_ART, 'weapons/key.png');
+    this.load.image(KEY_TITLE_ART, 'weapons/key-title.png');
+    this.load.image(KEY_ICON_ART, 'weapons/key-icon.png');
+    this.load.image(HERO_PORTRAIT_ART, 'hero/portrait.png');
+    this.load.spritesheet(HERO_SHEET, 'hero/walk.png', { frameWidth: HERO_FRAME_W, frameHeight: HERO_FRAME_H });
   }
 
   create() {
+    // The hero and key art are smooth downscales, not native pixel art: nearest sampling would break them up.
+    for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET]) {
+      if (this.textures.exists(key)) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    }
+    this.createHeroAnims();
+
     const g = this.make.graphics({}, false);
     const bake = (key: string, w: number, h: number, draw: () => void) => {
       g.clear();
@@ -136,16 +161,13 @@ export class BootScene extends Phaser.Scene {
     });
 
     this.bakePortraitFrame();
+    this.bakeWeaponSlot();
     this.bakeDarkness();
 
     g.destroy();
     this.launch();
   }
 
-  /**
-   * Keyhole behind the HUD portrait, drawn on a 2D canvas so its curves stay antialiased
-   * (pixelArt turns that off for Graphics). The HUD's HP gauge traces the same outline.
-   */
   /**
    * Twice the room in size, so centered on the player it covers the room from anywhere in it.
    * The hole is soft-edged, drawn on a 2D canvas like the portrait frame.
@@ -169,6 +191,27 @@ export class BootScene extends Phaser.Scene {
     texture.refresh();
   }
 
+  /**
+   * Keyhole behind the HUD portrait, drawn on a 2D canvas so its curves stay antialiased
+   * (pixelArt turns that off for Graphics). The HUD's HP gauge traces the same outline.
+   * With the hero art loaded, the face is drawn inside it, clipped to the keyhole.
+   */
+  /** Rounded square for the equipped key, on a 2D canvas like the portrait frame. */
+  private bakeWeaponSlot() {
+    const { size, cornerRadius } = WEAPON_SLOT;
+    const pad = 2;
+    const texture = this.textures.createCanvas('weapon-slot', size + pad * 2, size + pad * 2)!;
+    const ctx = texture.context;
+    ctx.beginPath();
+    ctx.roundRect(pad, pad, size, size, cornerRadius);
+    ctx.fillStyle = cssColor(COLORS.hpBack);
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = cssColor(COLORS.hpFrame);
+    ctx.stroke();
+    texture.refresh();
+  }
+
   private bakePortraitFrame() {
     const { headRadius, stemBottom } = PORTRAIT_KEYHOLE;
     const cx = headRadius + 2;
@@ -178,11 +221,43 @@ export class BootScene extends Phaser.Scene {
     traceKeyhole(ctx, keyholeOutline(PORTRAIT_KEYHOLE, 0), cx, cy);
     ctx.fillStyle = cssColor(COLORS.hpBack);
     ctx.fill();
+    this.drawHeroPortrait(ctx, cx, cy);
+    traceKeyhole(ctx, keyholeOutline(PORTRAIT_KEYHOLE, 0), cx, cy);
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
     ctx.strokeStyle = cssColor(COLORS.hpFrame);
     ctx.stroke();
     texture.refresh();
+  }
+
+  /** One walk loop per sheet row; each row's first frame is the idle pose, so the loop skips it. */
+  private createHeroAnims() {
+    if (!this.textures.exists(HERO_SHEET)) return;
+    const rows = this.textures.get(HERO_SHEET).frameTotal / HERO_FRAMES_PER_ROW;
+    for (let row = 0; row < Math.floor(rows); row++) {
+      const first = heroIdleFrame(row) + 1;
+      this.anims.create({
+        key: heroWalkAnim(row),
+        frames: this.anims.generateFrameNumbers(HERO_SHEET, { start: first, end: first + HERO_FRAMES_PER_ROW - 2 }),
+        frameRate: HERO_WALK_FPS,
+        repeat: -1,
+      });
+    }
+  }
+
+  private drawHeroPortrait(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+    if (!this.textures.exists(HERO_PORTRAIT_ART)) return;
+    const art = this.textures.get(HERO_PORTRAIT_ART).getSourceImage() as HTMLImageElement;
+    const scale = PORTRAIT_ART_WIDTH / art.width;
+    ctx.save();
+    traceKeyhole(ctx, keyholeOutline(PORTRAIT_KEYHOLE, 0), cx, cy);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    const x = cx - PORTRAIT_ART_EYES.x * scale;
+    const y = cy - PORTRAIT_ART_EYES.y * scale;
+    ctx.drawImage(art, x, y, art.width * scale, art.height * scale);
+    ctx.restore();
   }
 
   /** URL params jump straight into a run, skipping the title. */

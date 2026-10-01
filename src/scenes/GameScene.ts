@@ -259,7 +259,11 @@ export class GameScene extends Phaser.Scene implements EventHost {
   }
 
   update(_time: number, delta: number) {
-    if (this.gameOver || this.transitioning || this.inBossIntro) return;
+    if (this.gameOver || this.transitioning || this.inBossIntro) {
+      // Nothing moves the player meanwhile, so it mustn't walk in place.
+      this.player.stand();
+      return;
+    }
 
     this.clock.tick(delta);
     const time = this.clock.now;
