@@ -34,6 +34,17 @@ export interface PickupState {
   currency: number;
 }
 
+/** A floor boss always leaves at least one heal orb; one that drops resets the dry streak like any other. */
+export function withBossHeal(drops: readonly DropKind[], luck: DropLuck): { drops: DropKind[]; luck: DropLuck } {
+  if (drops.includes('heal')) return { drops: [...drops], luck };
+  return { drops: [...drops, 'heal'], luck: FRESH_LUCK };
+}
+
+/** A heal orb waits on the floor while HP is full, for when it's needed; anything else is always taken. */
+export function canCollect(kind: DropKind, healthFull: boolean): boolean {
+  return kind !== 'heal' || !healthFull;
+}
+
 /** State after picking up one drop, each coin worth `coinValue`. Healing never passes max HP. */
 export function applyDrop(state: PickupState, kind: DropKind, coinValue = 1): PickupState {
   if (kind === 'currency') return { ...state, currency: state.currency + coinValue };
