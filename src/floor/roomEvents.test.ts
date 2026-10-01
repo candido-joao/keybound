@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS, findAttack } from '../combat/enemies';
 import { Rng } from '../core/rng';
 import type { RoomType } from './FloorGenerator';
+import { PHASES } from './phases';
 import {
   EVENT_TUNING,
   altarCost,
@@ -120,5 +121,13 @@ describe('event tuning', () => {
   it('rains more after more dark waves', () => {
     expect(darkRain(3).length).toBeGreaterThan(darkRain(2).length);
     expect(darkRain(2).filter((k) => k === 'heal')).toHaveLength(2);
+  });
+});
+
+describe('miniBossDef names', () => {
+  it('gives every enemy that can fill a room an elder name of its own', () => {
+    for (const phase of PHASES) {
+      for (const { def } of phase.enemies) expect(miniBossDef(def).name).not.toBe(def.name);
+    }
   });
 });

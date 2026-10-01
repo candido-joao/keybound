@@ -66,6 +66,10 @@ const ELDER_NAMES: Record<string, MessageKey> = {
   'crystal-seer': 'enemy.crystal-seer-elder',
   automaton: 'enemy.automaton-elder',
   'automaton-gunner': 'enemy.automaton-gunner-elder',
+  bones: 'enemy.bones-elder',
+  lantern: 'enemy.lantern-elder',
+  'crystal-spike': 'enemy.crystal-spike-elder',
+  cuckoo: 'enemy.cuckoo-elder',
 };
 
 /** Events for this floor, rolled once when it is generated. Same seed, same events. */

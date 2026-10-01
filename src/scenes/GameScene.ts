@@ -19,7 +19,15 @@ import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, canCollect, rollDrops, withBossHeal } from '../combat/drops';
-import { ENEMIES, type EnemyDef, type SummonAttack, enemyForDepth, rollRoomEnemies } from '../combat/enemies';
+import { inBlast, reviveHp, spotAwayFrom } from '../combat/behaviors';
+import {
+  ENEMIES,
+  type EnemyDef,
+  type ExplodeAttack,
+  type SummonAttack,
+  enemyForDepth,
+  rollRoomEnemies,
+} from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
 import { Rng } from '../core/rng';
@@ -79,6 +87,27 @@ const DROP_SCATTER = 14;
 
 const CURSED_FLOOR_TINT = 0xc9a8ff;
 
+/** Walking this close to a bone pile crushes it for good. */
+const STOMP_RADIUS = 26;
+/** A pile rattles for this long before it gets back up. */
+const PILE_RATTLE_MS = 700;
+/** How far from a fallen sentinel its shards land. */
+const SPLIT_SPREAD = 14;
+/** A blink lands at least this far from the player. */
+const BLINK_MIN_DISTANCE = TILE * 4;
+/** Blasts shove enemies harder than a bolt does. */
+const BLAST_KNOCKBACK = 2;
+
+/** A fallen enemy that gets back up at `reviveAt` unless the player steps on it. */
+interface Pile {
+  def: EnemyDef;
+  image: Phaser.GameObjects.Image;
+  reviveAt: number;
+  rattling: boolean;
+  /** Times the enemy under it has already got back up. */
+  revivals: number;
+}
+
 /** A pedestal that must be stepped away from first arms beyond this distance. */
 const PEDESTAL_ARM_RANGE = TILE;
 
@@ -128,6 +157,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   private debugSpawns = 0;
   /** Gives each mini boss summon its own Rng stream. */
   private summons = 0;
+  /** Give each split and each blink their own Rng stream. */
+  private splits = 0;
+  private blinks = 0;
+  /** Bone piles in this room; the room isn't clear while any is left. */
+  private piles: Pile[] = [];
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
@@ -178,6 +212,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.mapRevealed = false;
     this.debugSpawns = 0;
     this.summons = 0;
+    this.splits = 0;
+    this.blinks = 0;
+    this.piles = [];
     this.transitioning = false;
     this.gameOver = false;
     this.inBossIntro = false;
@@ -265,13 +302,13 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const p = this.physics;
     p.add.collider(this.player, [this.walls, this.doorBlocks]);
     p.add.collider(this.enemies, [this.walls, this.doorBlocks]);
-    p.add.collider(this.enemies, this.enemies);
+    p.add.collider(this.enemies, this.enemies, undefined, (a, b) => !(a as Enemy).def.ghost && !(b as Enemy).def.ghost);
     p.add.collider(this.bolts, [this.walls, this.doorBlocks], (bolt) => (bolt as Bolt).burst());
 
     p.add.overlap(this.bolts, this.enemies, (b, e) => {
       const bolt = b as Bolt;
       const enemy = e as Enemy;
-      if (!bolt.active || !enemy.active) return;
+      if (!bolt.active || !enemy.active || !enemy.hittable) return;
       // Read before striking: a bolt that can't pierce any further is gone after it.
       const { x, y, damage } = bolt;
       if (!bolt.strike(enemy)) return;
@@ -335,11 +372,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       if (bolt.homing > 0) bolt.steerToward(this.homingTarget(bolt, enemies), dt);
     }
 
+    this.updatePiles(time);
     this.updateDrops(dt);
     this.updatePedestalLabels();
     this.eventDirector.update();
 
-    if (!this.room.cleared && this.enemies.countActive() === 0 && !this.eventDirector.holdsClear()) this.clearRoom();
+    if (!this.room.cleared && this.enemiesLeft() === 0 && !this.eventDirector.holdsClear()) this.clearRoom();
     if (this.room.cleared) this.checkDoorExit();
   }
 
@@ -380,6 +418,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.roomDecor.forEach((o) => o.destroy());
     this.roomDecor = [];
     this.pedestals = [];
+    for (const pile of this.piles) pile.image.destroy();
+    this.piles = [];
     this.walls.clear(true, true);
     this.doorBlocks.clear(true, true);
     this.enemies.clear(true, true);
@@ -541,6 +581,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     enemy.initBody();
     enemy.shoot = this.fireOrb;
     enemy.summon = this.summonMinions;
+    enemy.explode = this.explodeEnemy;
+    enemy.blinkTo = this.blinkSpot;
     enemy.speedScale = this.player.stats.enemySpeed;
     return enemy;
   }
@@ -577,25 +619,125 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   private killEnemy(enemy: Enemy) {
-    const { x, y } = enemy;
+    const { x, y, def } = enemy;
     enemy.die();
+    // A mini boss's death pays the event: it doesn't get back up.
+    if (def.revive && !def.miniBoss && enemy.revivals < def.revive.times) {
+      this.dropPile(def, x, y, enemy.revivals);
+      return;
+    }
+    this.reward(def, x, y);
+    if (def.split) this.splitInto(def.split.id, def.split.count, x, y);
+  }
+
+  /** Kill count, drops and what a boss's fall sets off. */
+  private reward(def: EnemyDef, x: number, y: number) {
     this.kills++;
-    const rolls = enemy.def.cursed ? 2 : 1;
+    const rolls = def.cursed ? 2 : 1;
     let kinds: DropKind[] = [];
     for (let i = 0; i < rolls; i++) {
       const roll = rollDrops(this.dropRng, this.luck, this.player.stats.healOdds);
       this.luck = roll.luck;
       kinds.push(...roll.drops);
     }
-    if (enemy.def.boss) {
+    if (def.boss) {
       const guaranteed = withBossHeal(kinds, this.luck);
       kinds = guaranteed.drops;
       this.luck = guaranteed.luck;
     }
     for (const kind of kinds) this.spawnDrop(kind, x, y);
     this.eventDirector.onDrops(kinds);
-    if (enemy.def.boss && this.room.event === 'twin') this.enrageSurvivingBosses();
+    if (def.boss && this.room.event === 'twin') this.enrageSurvivingBosses();
   }
+
+  private dropPile(def: EnemyDef, x: number, y: number, revivals: number) {
+    const image = this.add.image(x, y, 'bone-pile').setDepth(3);
+    this.piles.push({ def, image, reviveAt: this.clock.now + def.revive!.delayMs, rattling: false, revivals });
+  }
+
+  /** Stepping on a pile finishes it; left alone, it rattles and gets back up with part of its HP. */
+  private updatePiles(time: number) {
+    const stomp = STOMP_RADIUS * STOMP_RADIUS;
+    for (let i = this.piles.length - 1; i >= 0; i--) {
+      const pile = this.piles[i];
+      const { image, def } = pile;
+      if (Phaser.Math.Distance.Squared(image.x, image.y, this.player.x, this.player.y) < stomp) {
+        this.piles.splice(i, 1);
+        this.crushPile(pile);
+        continue;
+      }
+      if (!pile.rattling && time >= pile.reviveAt - PILE_RATTLE_MS) {
+        pile.rattling = true;
+        this.tweens.add({ targets: image, x: image.x + 2, duration: 50, yoyo: true, repeat: -1 });
+      }
+      if (time < pile.reviveAt) continue;
+      this.piles.splice(i, 1);
+      this.tweens.killTweensOf(image);
+      image.destroy();
+      const enemy = this.spawnEnemy(def, image.x, image.y, this.dropRng.next() * 1000);
+      enemy.hp = reviveHp(def.hp, def.revive!.hpShare);
+      enemy.revivals = pile.revivals + 1;
+    }
+  }
+
+  private crushPile(pile: Pile) {
+    const { image, def } = pile;
+    this.tweens.killTweensOf(image);
+    this.tweens.add({
+      targets: image,
+      scaleY: 0.2,
+      alpha: 0,
+      duration: 160,
+      onComplete: () => image.destroy(),
+    });
+    this.reward(def, image.x, image.y);
+  }
+
+  /** `count` plain `id` enemies bursting out around where the last one fell. */
+  private splitInto(id: string, count: number, x: number, y: number) {
+    const base = ENEMIES.find((e) => e.id === id);
+    if (!base) return;
+    const rng = new Rng(`${this.seed}:split:${this.depth}:${this.splits++}`);
+    const def = enemyForDepth(base, this.depth);
+    const margin = TILE * 1.5;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rng.next();
+      const sx = Phaser.Math.Clamp(x + Math.cos(angle) * SPLIT_SPREAD, ROOM_X + margin, ROOM_X + ROOM_W - margin);
+      const sy = Phaser.Math.Clamp(y + Math.sin(angle) * SPLIT_SPREAD, ROOM_Y + margin, ROOM_Y + ROOM_H - margin);
+      this.spawnEnemy(def, sx, sy, rng.next() * 1000);
+    }
+  }
+
+  /** Hurts the player and every enemy in reach, then the bomber is gone. */
+  private readonly explodeEnemy = (enemy: Enemy, blast: ExplodeAttack) => {
+    const { x, y } = enemy;
+    this.showBlast(x, y, blast.radius);
+    const player = this.player;
+    const hitsPlayer = inBlast(player.x - x, player.y - y, blast.radius);
+    if (hitsPlayer && !this.cheats.god && player.hurt(blast.damage) && player.health <= 0) this.onDeath();
+    // Backwards, since a blast can kill and take enemies out of the list.
+    const enemies = this.enemies.getChildren() as Enemy[];
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const other = enemies[i];
+      if (other === enemy || !other.active || !other.hittable) continue;
+      if (inBlast(other.x - x, other.y - y, blast.radius)) this.strikeEnemy(other, blast.damage, x, y, BLAST_KNOCKBACK);
+    }
+    if (enemy.active) this.killEnemy(enemy);
+  };
+
+  private showBlast(x: number, y: number, radius: number) {
+    const ring = this.add.circle(x, y, radius, 0xffa640, 0.45).setDepth(6).setScale(0.2);
+    this.tweens.add({ targets: ring, scale: 1, alpha: 0, duration: 260, onComplete: () => ring.destroy() });
+    this.cameras.main.shake(140, 0.006);
+  }
+
+  /** Somewhere on the floor far from the player. */
+  private readonly blinkSpot = (enemy: Enemy) => {
+    const rng = new Rng(`${this.seed}:blink:${this.depth}:${this.blinks++}`);
+    const spots = this.cellsAwayFromPlayer().map(({ col, row }) => ({ x: tileX(col), y: tileY(row) }));
+    if (spots.length === 0) return { x: enemy.x, y: enemy.y };
+    return spotAwayFrom(rng, spots, this.player.x, this.player.y, BLINK_MIN_DISTANCE);
+  };
 
   /** When a twin falls, the other goes into fury at once, whatever its HP. */
   private enrageSurvivingBosses() {
@@ -806,8 +948,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     return this.clock.now;
   }
 
+  /** Bone piles count: they get back up. */
   enemiesLeft(): number {
-    return this.enemies.countActive();
+    return this.enemies.countActive() + this.piles.length;
   }
 
   rainDrops(kinds: readonly DropKind[]) {
@@ -1004,6 +1147,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       this.killEnemy(enemy);
       killed++;
     }
+    for (const pile of this.piles) this.crushPile(pile);
+    this.piles = [];
     return killed;
   }
 
