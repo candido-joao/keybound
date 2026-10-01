@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS, findAttack } from '../combat/enemies';
+import { CUCKOO, SHADOW, SHADOW_CASTER, SHADOW_COLOSSUS, findAttack } from '../combat/enemies';
 import { Rng } from '../core/rng';
 import type { RoomType } from './FloorGenerator';
+import { PHASES } from './phases';
 import {
   EVENT_TUNING,
   altarCost,
@@ -106,6 +107,17 @@ describe('event tuning', () => {
     expect(findAttack(elder, 'summon')?.minionId).toBe('shadow-caster');
   });
 
+  it('makes a cuckoo mini boss summon without exploding', () => {
+    const elder = miniBossDef(CUCKOO);
+    expect(findAttack(elder, 'explode')).toBeUndefined();
+    expect(findAttack(elder, 'summon')).toEqual({
+      kind: 'summon',
+      ...EVENT_TUNING.miniboss.summon,
+      minionId: CUCKOO.id,
+    });
+    expect(findAttack(CUCKOO, 'explode')).toBeDefined();
+  });
+
   it('prices the altar at a quarter of the current max HP', () => {
     expect(altarCost(60)).toBe(15);
     expect(altarCost(100)).toBe(25);
@@ -120,5 +132,13 @@ describe('event tuning', () => {
   it('rains more after more dark waves', () => {
     expect(darkRain(3).length).toBeGreaterThan(darkRain(2).length);
     expect(darkRain(2).filter((k) => k === 'heal')).toHaveLength(2);
+  });
+});
+
+describe('miniBossDef names', () => {
+  it('gives every enemy that can fill a room an elder name of its own', () => {
+    for (const phase of PHASES) {
+      for (const { def } of phase.enemies) expect(miniBossDef(def).name).not.toBe(def.name);
+    }
   });
 });

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../core/rng';
 import {
+  BONES,
   CRYPT_ENEMIES,
+  ENEMIES,
+  LANTERN,
   SHADOW,
   SHADOW_CASTER,
   SHADOW_COLOSSUS,
@@ -9,6 +12,7 @@ import {
   enemyForDepth,
   findAttack,
   rollRoomEnemies,
+  walkFrames,
 } from './enemies';
 
 describe('crossesFury', () => {
@@ -66,5 +70,44 @@ describe('SHADOW_COLOSSUS fury dash', () => {
     const dash = findAttack(SHADOW_COLOSSUS, 'dash')!;
     const normal = (dash.speed * dash.durationMs) / 1000;
     expect(SHADOW_COLOSSUS.fury!.dash.distance / normal).toBeCloseTo(1.4, 1);
+  });
+});
+
+describe('walkFrames', () => {
+  it('alternates each step with the idle pose', () => {
+    expect(walkFrames(3)).toEqual([1, 0, 2, 0]);
+  });
+
+  it('is empty for a single frame', () => {
+    expect(walkFrames(1)).toEqual([]);
+  });
+});
+
+describe('ENEMIES', () => {
+  it('splits only into enemies that exist', () => {
+    for (const def of ENEMIES) {
+      if (def.split) expect(ENEMIES.map((e) => e.id)).toContain(def.split.id);
+    }
+  });
+
+  it('has unique ids', () => {
+    expect(new Set(ENEMIES.map((e) => e.id)).size).toBe(ENEMIES.length);
+  });
+
+  it('keeps plain enemies free of attack telegraphs', () => {
+    for (const def of ENEMIES) {
+      if (def.boss) continue;
+      for (const attack of def.attacks) {
+        if ('telegraphMs' in attack) expect(attack.telegraphMs, def.id).toBe(0);
+      }
+    }
+  });
+});
+
+describe('CRYPT_ENEMIES', () => {
+  it('brings in bones from floor 2 and lanterns from floor 3', () => {
+    expect(rollRoomEnemies(new Rng('f2'), 2, 300, CRYPT_ENEMIES)).toContain(BONES);
+    expect(rollRoomEnemies(new Rng('f2'), 2, 300, CRYPT_ENEMIES)).not.toContain(LANTERN);
+    expect(rollRoomEnemies(new Rng('f3'), 3, 300, CRYPT_ENEMIES)).toContain(LANTERN);
   });
 });

@@ -66,6 +66,10 @@ const ELDER_NAMES: Record<string, MessageKey> = {
   'crystal-seer': 'enemy.crystal-seer-elder',
   automaton: 'enemy.automaton-elder',
   'automaton-gunner': 'enemy.automaton-gunner-elder',
+  bones: 'enemy.bones-elder',
+  lantern: 'enemy.lantern-elder',
+  'crystal-spike': 'enemy.crystal-spike-elder',
+  cuckoo: 'enemy.cuckoo-elder',
 };
 
 /** Events for this floor, rolled once when it is generated. Same seed, same events. */
@@ -126,7 +130,10 @@ export function miniBossDef(def: EnemyDef): EnemyDef {
     contactDamage: Math.round(def.contactDamage * damageScale),
     miniBoss: true,
     outline,
-    attacks: [...def.attacks, { kind: 'summon', ...summon, minionId: def.id }],
+    attacks: [
+      ...def.attacks.filter((attack) => attack.kind !== 'explode'),
+      { kind: 'summon', ...summon, minionId: def.id },
+    ],
   };
 }
 

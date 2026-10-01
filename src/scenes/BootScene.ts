@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { ENEMIES, ENEMY_FRAME, ENEMY_WALK_FPS, walkAnimKey, walkFrames } from '../combat/enemies';
+import { PLACEHOLDER_BODY, placeholderColors } from '../combat/placeholderArt';
 import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
 import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
@@ -17,6 +19,9 @@ import {
 /** Light around the player in a dark room: fully lit inside, fading out to the edge. */
 const DARK_LIGHT_INNER = 50;
 const DARK_LIGHT_OUTER = 120;
+
+/** What a revived enemy leaves on the floor. */
+const BONE_PILE = 'bone-pile';
 
 /** Drawn width of the portrait art; big enough that the face fills the keyhole's head. */
 const PORTRAIT_ART_WIDTH = 52;
@@ -40,14 +45,19 @@ export class BootScene extends Phaser.Scene {
     this.load.image(KEY_ICON_ART, 'weapons/key-icon.png');
     this.load.image(HERO_PORTRAIT_ART, 'hero/portrait.png');
     this.load.spritesheet(HERO_SHEET, 'hero/walk.png', { frameWidth: HERO_FRAME_W, frameHeight: HERO_FRAME_H });
+    const frame = { frameWidth: ENEMY_FRAME, frameHeight: ENEMY_FRAME };
+    for (const def of ENEMIES) if (def.frames) this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, frame);
+    this.load.image(BONE_PILE, `enemies/${BONE_PILE}.png`);
   }
 
+  /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
   create() {
     // The hero and key art are smooth downscales, not native pixel art: nearest sampling would break them up.
     for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET]) {
       if (this.textures.exists(key)) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
     }
     this.createHeroAnims();
+    this.createEnemyAnims();
 
     const g = this.make.graphics({}, false);
     const bake = (key: string, w: number, h: number, draw: () => void) => {
@@ -102,28 +112,24 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(COLORS.boltCore).fillCircle(7, 7, 2.5);
     });
 
-    // The later phases' enemies are recolors until their own art arrives.
-    const bakeShadow = (key: string, body: number, eye: number) =>
-      bake(key, 32, 32, () => {
-        g.fillStyle(body).fillEllipse(16, 20, 26, 22);
-        g.fillStyle(body).fillTriangle(6, 14, 4, 0, 12, 10).fillTriangle(26, 14, 28, 0, 20, 10);
-        g.fillStyle(eye).fillCircle(11, 17, 3.2).fillCircle(21, 17, 3.2);
+    // Enemies without art yet, the Colossi among them, get the placeholder body.
+    const { size, body, horns, eyes, eyeRadius } = PLACEHOLDER_BODY;
+    for (const def of ENEMIES) {
+      if (this.textures.exists(def.texture)) continue;
+      const colors = placeholderColors(def);
+      bake(def.texture, size, size, () => {
+        g.fillStyle(colors.body).fillEllipse(body.x, body.y, body.w, body.h);
+        for (const h of horns) g.fillTriangle(h[0], h[1], h[2], h[3], h[4], h[5]);
+        g.fillStyle(colors.eye);
+        for (const [x, y] of eyes) g.fillCircle(x, y, eyeRadius);
       });
-    bakeShadow('shadow', COLORS.shadow, COLORS.shadowEye);
-    bakeShadow('crystal-sentinel', 0x173a40, 0x9ff7ff);
-    bakeShadow('automaton', 0x3a2a1a, 0xffa640);
-
-    // Same eye spots as the plain shadow, so the eye glow lines up; hood and bright eyes mark it as a shooter.
-    const bakeCaster = (key: string, body: number, hood: number, eye: number) =>
-      bake(key, 32, 32, () => {
-        g.fillStyle(body).fillEllipse(16, 20, 24, 22);
-        g.fillStyle(body).fillTriangle(5, 16, 16, -1, 27, 16);
-        g.fillStyle(hood).fillTriangle(9, 14, 16, 3, 23, 14);
-        g.fillStyle(eye).fillCircle(11, 17, 3).fillCircle(21, 17, 3);
+    }
+    if (!this.textures.exists(BONE_PILE)) {
+      bake(BONE_PILE, 32, 32, () => {
+        g.fillStyle(0xb8ab84).fillEllipse(16, 24, 26, 10);
+        g.fillStyle(0xd8cfb0).fillCircle(16, 18, 6);
       });
-    bakeCaster('shadow-caster', 0x3b2358, 0x5c3a82, 0xff5fa2);
-    bakeCaster('crystal-seer', 0x1f4f57, 0x3f8f99, 0xe0fbff);
-    bakeCaster('automaton-gunner', 0x4a3522, 0x8a6a3a, 0xff6f3c);
+    }
 
     bake('particle', 8, 8, () => {
       g.fillStyle(0xffffff).fillCircle(4, 4, 4);
@@ -252,6 +258,22 @@ export class BootScene extends Phaser.Scene {
         key: heroWalkAnim(row),
         frames: this.anims.generateFrameNumbers(HERO_SHEET, { start: first, end: first + HERO_FRAMES_PER_ROW - 2 }),
         frameRate: HERO_WALK_FPS,
+        repeat: -1,
+      });
+    }
+  }
+
+  private createEnemyAnims() {
+    for (const def of ENEMIES) {
+      const frames = walkFrames(def.frames ?? 1);
+      const key = walkAnimKey(def.texture);
+      if (frames.length === 0 || !this.textures.exists(def.texture) || this.anims.exists(key)) continue;
+      // A missing strip loads as a single frame: no walk to play.
+      if (this.textures.get(def.texture).frameTotal < def.frames!) continue;
+      this.anims.create({
+        key,
+        frames: frames.map((frame) => ({ key: def.texture, frame })),
+        frameRate: ENEMY_WALK_FPS,
         repeat: -1,
       });
     }
