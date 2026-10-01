@@ -50,6 +50,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image(BONE_PILE, `enemies/${BONE_PILE}.png`);
   }
 
+  /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
   create() {
     // The hero and key art are smooth downscales, not native pixel art: nearest sampling would break them up.
     for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET]) {

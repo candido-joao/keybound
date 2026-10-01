@@ -82,10 +82,12 @@ function phaseEnemies(phase: PhaseDef, firstFloor: number): EnemyEntry[] {
   return entries;
 }
 
+/** Return the first configured pool opening within the inclusive floor range, if any. */
 function poolOpening(firstFloor: number, lastFloor: number): number | undefined {
   return Object.values(POOL_DEPTH).find((floor) => floor >= firstFloor && floor <= lastFloor);
 }
 
+/** Look up a registered enemy, returning undefined for an unknown id. */
 export function enemyById(id: string): EnemyDef | undefined {
   return ENEMIES.find((def) => def.id === id);
 }
@@ -112,10 +114,12 @@ export function enemyLines(def: EnemyDef): Line[] {
   return lines;
 }
 
+/** Describe a split child using its parent’s translatable name. */
 function splitFrom(parent: EnemyDef): Line {
   return { key: 'wiki.trait.split-from', params: { name: { key: parent.name } } };
 }
 
+/** Select an attack description and display parameters from the gameplay definition. */
 export function attackLine(attack: EnemyAttack): Line {
   if (attack.kind === 'dash' && attack.align !== undefined) return { key: 'wiki.attack.charge' };
   if (attack.kind === 'dash') {
@@ -142,6 +146,7 @@ export function itemEntries(items: readonly Item[] = ITEMS): ItemEntry[] {
     if (base.base) continue;
     const group = items.filter((item) => baseId(item) === base.id);
     const total = group.reduce((sum, item) => sum + item.weight, 0);
+    /** Express a version’s weight as a rounded percentage within its base item group. */
     const version = (item: Item): ItemVersion => ({ item, odds: Math.round((item.weight / total) * 100) });
     entries.push({
       base: version(base),
@@ -169,10 +174,12 @@ const EVENT_NAMES: Record<RoomEventId, MessageKey> = {
   twin: 'wiki.event.twin.name',
 };
 
+/** Pair each registered room event with its localized name and tuning-based description. */
 export function eventEntries(): EventEntry[] {
   return ROOM_EVENTS.map(({ id }) => ({ id, name: EVENT_NAMES[id], text: eventText(id) }));
 }
 
+/** Build translation parameters from event tuning, converting shares and milliseconds for display. */
 function eventText(id: RoomEventId): Line {
   const { dark, cursed, altar, timed, miniboss, twin } = EVENT_TUNING;
   const texts: Record<RoomEventId, Line> = {
@@ -195,14 +202,17 @@ function eventText(id: RoomEventId): Line {
   return texts[id];
 }
 
+/** Return normal-room and boss-room event chances as rounded percentages. */
 export function eventOdds(): { normal: number; boss: number } {
   return { normal: pct(EVENT_CHANCE.normal), boss: pct(EVENT_CHANCE.boss) };
 }
 
+/** Convert a fractional share to a whole percentage without clamping it. */
 export function pct(share: number): number {
   return Math.round(share * 100);
 }
 
+/** Convert milliseconds to seconds rounded to one decimal place. */
 export function seconds(ms: number): number {
   return Math.round(ms / 100) / 10;
 }

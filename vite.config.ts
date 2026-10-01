@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { type Connect, type Plugin, defineConfig } from 'vite';
 
+/** Resolve a build entry relative to this config file rather than the process working directory. */
 const page = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /** Without the slash, /wiki falls through to the game's page instead of the wiki's index.html. */
@@ -14,7 +15,9 @@ const addWikiSlash: Connect.NextHandleFunction = (req, res, next) => {
 
 const wikiSlash: Plugin = {
   name: 'wiki-slash',
+  /** Apply the wiki trailing-slash redirect during development. */
   configureServer: (server) => void server.middlewares.use(addWikiSlash),
+  /** Apply the same wiki redirect when previewing the production build. */
   configurePreviewServer: (server) => void server.middlewares.use(addWikiSlash),
 };
 

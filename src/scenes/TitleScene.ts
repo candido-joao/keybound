@@ -22,6 +22,7 @@ export class TitleScene extends Phaser.Scene {
     super('title');
   }
 
+  /** Build the localized title screen, restore the typed seed, and register its keyboard shortcuts. */
   create(data: TitleData) {
     this.seedInput = data.seedInput ?? '';
     this.cursorOn = true;
@@ -72,6 +73,7 @@ export class TitleScene extends Phaser.Scene {
       .setAngle(-35);
   }
 
+  /** Dispatch title shortcuts or normalize seed input while respecting the seed length limit. */
   private onKey(event: KeyboardEvent) {
     if (event.key === 'Enter') return this.startRun();
     if (event.key === 'Tab') return this.cycleLocale();

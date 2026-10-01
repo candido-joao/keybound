@@ -10,6 +10,7 @@ initLocale();
 render();
 startAnimation();
 
+/** Rebuild the localized page, discard detached sprite registrations, and restore the hash target. */
 function render() {
   renderWiki(root, (locale) => {
     chooseLocale(locale);

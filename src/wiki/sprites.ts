@@ -8,8 +8,10 @@ const ZOOM = 2;
 
 const FADE_OPACITY = { shown: 1, fading: 0.55, hidden: 0.12, appearing: 0.55 } as const;
 
+/** Prefix a public asset path with Vite’s deployment base so subpath hosting works. */
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
+/** Format a numeric RGB color as a six-digit CSS hex value, preserving leading zeroes. */
 const css = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
 
 interface Animated {
@@ -44,6 +46,7 @@ export function enemySprite(def: EnemyDef): HTMLCanvasElement {
   return canvas;
 }
 
+/** Draw a zero-based frame from a horizontal enemy strip without smoothing; skip unavailable images or contexts. */
 function drawFrame({ canvas, image }: Animated, frame: number) {
   const ctx = canvas.getContext('2d');
   if (!ctx || !image) return;
@@ -81,6 +84,7 @@ function drawPlaceholder(canvas: HTMLCanvasElement, def: EnemyDef) {
   ctx.restore();
 }
 
+/** Load the base item’s decorative icon, replacing a failed image with an orb in the item’s color. */
 export function itemIcon(item: Item): HTMLImageElement {
   const img = document.createElement('img');
   img.className = 'icon';
@@ -100,6 +104,7 @@ function itemOrb(item: Item): HTMLElement {
   return orb;
 }
 
+/** Load a phase screenshot lazily with supplied alternative text, removing it if loading fails. */
 export function phaseShot(phaseId: string, alt: string): HTMLImageElement {
   const img = document.createElement('img');
   img.className = 'shot';
@@ -126,6 +131,7 @@ export function startAnimation() {
   }, 1000 / ENEMY_WALK_FPS);
 }
 
+/** Advance one sprite using a walk-cycle tick and elapsed milliseconds for its fade state. */
 function step(entry: Animated, tick: number, elapsed: number) {
   const { def } = entry;
   const frames = walkFrames(def.frames ?? 1);
