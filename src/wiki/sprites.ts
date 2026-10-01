@@ -6,7 +6,8 @@ import { type Item, baseId } from '../combat/stats';
 /** Art is drawn at whole multiples so the pixels stay square. */
 const ZOOM = 2;
 
-const FADE_OPACITY = { shown: 1, fading: 0.55, hidden: 0.12, appearing: 0.55 } as const;
+/** Never fully gone, unlike in the game: the reader still has to find it on the page. */
+const FADE_OPACITY = { shown: 1, fading: 0.65, hidden: 0.35, appearing: 0.65 } as const;
 
 /** Prefix a public asset path with Vite’s deployment base so subpath hosting works. */
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;

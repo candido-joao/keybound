@@ -269,7 +269,7 @@ export class BootScene extends Phaser.Scene {
       const key = walkAnimKey(def.texture);
       if (frames.length === 0 || !this.textures.exists(def.texture) || this.anims.exists(key)) continue;
       // A missing strip loads as a single frame: no walk to play.
-      if (this.textures.get(def.texture).frameTotal - 1 < def.frames!) continue;
+      if (this.textures.get(def.texture).frameTotal < def.frames!) continue;
       this.anims.create({
         key,
         frames: frames.map((frame) => ({ key: def.texture, frame })),
