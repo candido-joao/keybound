@@ -9,6 +9,8 @@ export interface BoltSpec {
   range: number;
   homing: number;
   scale: number;
+  /** Enemies it can pass through before bursting. */
+  pierce: number;
   /** Shooter velocity added on top, so bolts carry movement like Isaac's tears. */
   inheritVx: number;
   inheritVy: number;
@@ -17,6 +19,9 @@ export interface BoltSpec {
 export class Bolt extends Phaser.Physics.Arcade.Image {
   damage = 0;
   homing = 0;
+  private pierceLeft = 0;
+  /** Enemies already struck, so overlapping one for several frames hits it once. */
+  private struck: object[] = [];
   private range = 0;
   private startX = 0;
   private startY = 0;
@@ -31,6 +36,7 @@ export class Bolt extends Phaser.Physics.Arcade.Image {
   launch(spec: BoltSpec) {
     this.damage = spec.damage;
     this.homing = spec.homing;
+    this.pierceLeft = spec.pierce;
     this.range = spec.range;
     this.speed = spec.speed;
     this.startX = spec.x;
@@ -53,6 +59,25 @@ export class Bolt extends Phaser.Physics.Arcade.Image {
     const wanted = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
     const angle = Phaser.Math.Angle.RotateTo(current, wanted, this.homing * dt);
     body.setVelocity(Math.cos(angle) * this.speed, Math.sin(angle) * this.speed);
+  }
+
+  /**
+   * Called on touching `target`. False if it was already struck. Otherwise the bolt counts the
+   * hit and bursts, unless it can still pierce.
+   */
+  strike(target: object): boolean {
+    if (this.hasStruck(target)) return false;
+    this.struck.push(target);
+    if (this.pierceLeft <= 0) {
+      this.burst();
+      return true;
+    }
+    this.pierceLeft--;
+    return true;
+  }
+
+  hasStruck(target: object): boolean {
+    return this.struck.includes(target);
   }
 
   /** True once the bolt has flown past its range. */
