@@ -15,6 +15,7 @@ Feito com [Phaser 4](https://phaser.io), TypeScript e Vite.
 | `R`             | Nova run (no pause) ou repetir a seed (no resumo) |
 | `Q`             | Voltar ao menu (no pause)                         |
 | `L`             | Trocar idioma (no pause; `Tab` no menu)           |
+| `F1`            | Abrir a wiki em nova aba (no menu)                |
 
 Cada andar tem uma **sala do tesouro** e uma **sala do boss**. Os dois dão um item; derrotar o boss abre o portal para o próximo andar. Itens podem se repetir e seus efeitos acumulam.
 
@@ -31,6 +32,10 @@ pnpm test      # testes da lógica pura
 pnpm build     # build de produção em dist/
 pnpm preview   # serve o build
 ```
+
+### Wiki
+
+A wiki fica em `/wiki/` (`wiki/index.html`, código em `src/wiki`). Fases, inimigos, itens e salas especiais saem direto dos registros (`PHASES`, `ENEMIES`, `ITEMS`, `ROOM_EVENTS`): um conteúdo novo aparece nela sem mexer na wiki. Os prints das fases ficam em `public/wiki/<id da fase>.png` (960×540, tirados do jogo).
 
 ### Parâmetros de URL
 

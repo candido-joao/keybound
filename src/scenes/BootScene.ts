@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { ENEMIES, walkAnimKey, walkFrames } from '../combat/enemies';
+import { ENEMIES, ENEMY_FRAME, ENEMY_WALK_FPS, walkAnimKey, walkFrames } from '../combat/enemies';
+import { PLACEHOLDER_BODY, placeholderColors } from '../combat/placeholderArt';
 import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
 import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
@@ -19,9 +20,6 @@ import {
 const DARK_LIGHT_INNER = 50;
 const DARK_LIGHT_OUTER = 120;
 
-/** Enemy art is a strip of square frames this wide. */
-const ENEMY_FRAME = 48;
-const ENEMY_WALK_FPS = 6;
 /** What a revived enemy leaves on the floor. */
 const BONE_PILE = 'bone-pile';
 
@@ -113,19 +111,17 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(COLORS.boltCore).fillCircle(7, 7, 2.5);
     });
 
-    // The Colossi keep this body until their own art arrives; its eyes are where the boss's warning glows.
-    const bakeShadow = (key: string, body: number, eye: number) =>
-      bake(key, 32, 32, () => {
-        g.fillStyle(body).fillEllipse(16, 20, 26, 22);
-        g.fillStyle(body).fillTriangle(6, 14, 4, 0, 12, 10).fillTriangle(26, 14, 28, 0, 20, 10);
-        g.fillStyle(eye).fillCircle(11, 17, 3.2).fillCircle(21, 17, 3.2);
-      });
-    bakeShadow('shadow-colossus', COLORS.shadow, COLORS.shadowEye);
-    bakeShadow('crystal-colossus', 0x173a40, 0x9ff7ff);
-    bakeShadow('gear-colossus', 0x3a2a1a, 0xffa640);
-    // Any enemy whose art is missing still shows up, in its death color.
+    // Enemies without art yet, the Colossi among them, get the placeholder body.
+    const { size, body, horns, eyes, eyeRadius } = PLACEHOLDER_BODY;
     for (const def of ENEMIES) {
-      if (!this.textures.exists(def.texture)) bakeShadow(def.texture, def.deathColor, 0xffffff);
+      if (this.textures.exists(def.texture)) continue;
+      const colors = placeholderColors(def);
+      bake(def.texture, size, size, () => {
+        g.fillStyle(colors.body).fillEllipse(body.x, body.y, body.w, body.h);
+        for (const h of horns) g.fillTriangle(h[0], h[1], h[2], h[3], h[4], h[5]);
+        g.fillStyle(colors.eye);
+        for (const [x, y] of eyes) g.fillCircle(x, y, eyeRadius);
+      });
     }
     if (!this.textures.exists(BONE_PILE)) {
       bake(BONE_PILE, 32, 32, () => {

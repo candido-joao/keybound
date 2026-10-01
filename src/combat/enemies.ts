@@ -510,6 +510,10 @@ export function findAttack<K extends EnemyAttack['kind']>(
   return def.attacks.find((a): a is Extract<EnemyAttack, { kind: K }> => a.kind === kind);
 }
 
+/** Enemy art is a strip of square frames this wide. */
+export const ENEMY_FRAME = 48;
+export const ENEMY_WALK_FPS = 6;
+
 /** Walk cycle over an art strip whose first frame is the idle pose: each step, then idle again. */
 export function walkFrames(frames: number): number[] {
   if (frames < 3) return [];
