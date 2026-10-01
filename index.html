@@ -6,8 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Keybound</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #07060d; overflow: hidden; }
-      #app { width: 100%; height: 100%; }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #07060d;
+        overflow: hidden;
+        /* Keyboard-only game: the pointer would just sit over the screen. */
+        cursor: none;
+      }
+      #app {
+        width: 100%;
+        height: 100%;
+      }
     </style>
   </head>
   <body>

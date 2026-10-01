@@ -25,10 +25,6 @@ export class Rng {
     return this.next() < p;
   }
 
-  pick<T>(items: readonly T[]): T {
-    return items[Math.floor(this.next() * items.length)];
-  }
-
   shuffle<T>(items: T[]): T[] {
     for (let i = items.length - 1; i > 0; i--) {
       const j = Math.floor(this.next() * (i + 1));
@@ -45,6 +41,16 @@ function hashSeed(seed: string): number {
     h = (h << 13) | (h >>> 19);
   }
   return h >>> 0;
+}
+
+export const SEED_MAX_LENGTH = 12;
+
+/** Seeds are typed by hand, so case and anything but letters and digits are ignored. */
+export function normalizeSeed(input: string): string {
+  return input
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, SEED_MAX_LENGTH);
 }
 
 export function randomSeed(): string {

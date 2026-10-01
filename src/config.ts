@@ -1,5 +1,8 @@
 export const TILE = 48;
 
+/** How close the player must be to read a pedestal's or an altar's text. */
+export const LABEL_RANGE = TILE * 2;
+
 // Room grid includes the wall ring: 13x7 playable tiles, like Isaac.
 export const ROOM_COLS = 15;
 export const ROOM_ROWS = 9;
@@ -30,9 +33,17 @@ export const COLORS = {
   boltCore: 0xffffff,
   shadow: 0x120f1f,
   shadowEye: 0xffd23f,
-  heart: 0xe8435a,
-  heartEmpty: 0x3b2530,
+  hp: 0xe8435a,
+  hpTrail: 0xffe0a8,
+  hpBack: 0x2a1822,
+  hpFrame: 0xf2c14e,
+  boss: 0xe8435a,
+  treasure: 0xffd23f,
+  doorMarker: 0x6d64a0,
+  curse: 0x9b4dff,
   text: '#e9e4ff',
+  textDim: '#b8b0d8',
+  textMuted: '#9d95c4',
 } as const;
 
 // Pixel <-> tile helpers for the current room.
