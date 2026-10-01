@@ -17,7 +17,7 @@ import {
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
-import { BASE_STATS, enemiesPerRoom } from '../combat/balance';
+import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, rollDrops } from '../combat/drops';
 import {
   ENEMIES,
@@ -48,7 +48,9 @@ import {
   twinDef,
 } from '../floor/roomEvents';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
+import { BeamWeapon } from './BeamWeapon';
 import type { BossIntroData } from './BossIntroScene';
+import { ChainShock, type StrikeHost } from './ChainShock';
 import { type EventHost, RoomEventDirector } from './RoomEventDirector';
 
 /** Where the player appears when entering through a given side. */
@@ -83,7 +85,7 @@ const DOOR_MARKER: Record<RoomType, number> = {
   boss: COLORS.boss,
 };
 
-export class GameScene extends Phaser.Scene implements EventHost {
+export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   seed!: string;
   seeded!: boolean;
   depth!: number;
@@ -96,6 +98,8 @@ export class GameScene extends Phaser.Scene implements EventHost {
   /** Max HP traded away at blood altars this run. */
   private maxHealthLost = 0;
   private eventDirector!: RoomEventDirector;
+  private beamWeapon!: BeamWeapon;
+  private chainShock!: ChainShock;
   private dropRng!: Rng;
   /** Pickups lying in the current room. */
   private drops: { kind: DropKind; image: Phaser.GameObjects.Image }[] = [];
@@ -188,7 +192,13 @@ export class GameScene extends Phaser.Scene implements EventHost {
     this.eventDirector = new RoomEventDirector(this, this);
 
     const rewardRooms = [...this.floor.rooms.values()].filter((r) => r.type === 'treasure' || r.type === 'boss');
-    const rewards = rollRewards(new Rng(`${this.seed}:items:${this.depth}`), ITEMS, this.items, rewardRooms.length);
+    const rewards = rollRewards(
+      new Rng(`${this.seed}:items:${this.depth}`),
+      ITEMS,
+      this.items,
+      rewardRooms.length,
+      this.depth,
+    );
     this.roomItems = new Map();
     rewardRooms.forEach((room, i) => rewards[i] && this.roomItems.set(room, rewards[i]));
 
@@ -202,6 +212,8 @@ export class GameScene extends Phaser.Scene implements EventHost {
     const stats = this.currentStats();
     this.player = new Player(this, this.clock, tileX(DOOR_COL), tileY(DOOR_ROW), stats);
     if (data.health !== undefined) this.player.health = Math.min(stats.maxHealth, data.health);
+    this.chainShock = new ChainShock(this, this, new Rng(`${this.seed}:chain:${this.depth}`));
+    this.beamWeapon = new BeamWeapon(this, this, this.chainShock);
 
     this.setupCollisions();
     this.enterRoom(this.floor.start);
@@ -237,9 +249,16 @@ export class GameScene extends Phaser.Scene implements EventHost {
       const bolt = b as Bolt;
       const enemy = e as Enemy;
       if (!bolt.active || !enemy.active) return;
-      bolt.burst();
-      if (!enemy.hit(bolt.damage, bolt.x, bolt.y)) return;
-      this.killEnemy(enemy);
+      // Read before striking: a bolt that can't pierce any further is gone after it.
+      const { x, y, damage } = bolt;
+      if (!bolt.strike(enemy)) return;
+      const enemyX = enemy.x;
+      const enemyY = enemy.y;
+      this.strikeEnemy(enemy, damage, x, y, this.player.stats.knockback);
+      const now = this.clock.now;
+      if (now < enemy.chainReadyAt) return;
+      enemy.chainReadyAt = now + CHAIN_COOLDOWN_MS;
+      this.chainShock.trigger(this.player.stats, enemy, enemyX, enemyY, damage, now);
     });
 
     p.add.collider(this.orbs, [this.walls, this.doorBlocks], (orb) => (orb as HostileOrb).release());
@@ -260,22 +279,28 @@ export class GameScene extends Phaser.Scene implements EventHost {
 
   update(_time: number, delta: number) {
     if (this.gameOver || this.transitioning || this.inBossIntro) {
-      // Nothing moves the player meanwhile, so it mustn't walk in place.
+      // Nothing moves the player meanwhile, so it mustn't walk in place, nor hold a beam on.
       this.player.stand();
+      this.beamWeapon.stop();
       return;
     }
 
     this.clock.tick(delta);
     const time = this.clock.now;
     this.player.move();
-    for (const spec of this.player.tryShoot(time)) {
+    const shot = this.player.tryShoot(time);
+    for (const spec of shot.bolts) {
       const bolt = new Bolt(this, spec);
       this.bolts.add(bolt);
       bolt.launch(spec);
     }
+    if (shot.beam) this.beamWeapon.fire(shot.beam, this.player.stats, time);
 
     const enemies = this.enemies.getChildren() as Enemy[];
     for (const enemy of enemies) enemy.chase(this.player, time);
+    this.applyWallSlams(enemies);
+    this.beamWeapon.update(this.player, time);
+    this.chainShock.update(time);
     this.updateBossHealth(enemies);
 
     const dt = delta / 1000;
@@ -284,7 +309,7 @@ export class GameScene extends Phaser.Scene implements EventHost {
         bolt.burst();
         continue;
       }
-      if (bolt.homing > 0) bolt.steerToward(this.nearest(bolt, enemies), dt);
+      if (bolt.homing > 0) bolt.steerToward(this.homingTarget(bolt, enemies), dt);
     }
 
     this.updateDrops();
@@ -307,11 +332,18 @@ export class GameScene extends Phaser.Scene implements EventHost {
     }
   }
 
-  private nearest(from: Phaser.GameObjects.Components.Transform, targets: Enemy[]): Enemy | undefined {
-    const dist = (t: Enemy) => Phaser.Math.Distance.Squared(from.x, from.y, t.x, t.y);
-    return targets
-      .filter((t) => t.active && t.harmful)
-      .reduce<Enemy | undefined>((best, t) => (!best || dist(t) < dist(best) ? t : best), undefined);
+  /** Nearest enemy the bolt hasn't gone through yet; a piercing bolt would otherwise circle the one it just hit. */
+  private homingTarget(bolt: Bolt, targets: readonly Enemy[]): Enemy | undefined {
+    let best: Enemy | undefined;
+    let bestD2 = Infinity;
+    for (const t of targets) {
+      if (!t.active || !t.harmful || bolt.hasStruck(t)) continue;
+      const d2 = Phaser.Math.Distance.Squared(bolt.x, bolt.y, t.x, t.y);
+      if (d2 >= bestD2) continue;
+      best = t;
+      bestD2 = d2;
+    }
+    return best;
   }
 
   // ---------------------------------------------------------------- rooms
@@ -330,6 +362,8 @@ export class GameScene extends Phaser.Scene implements EventHost {
     this.enemies.clear(true, true);
     this.bolts.clear(true, true);
     for (const orb of this.orbs.getChildren() as HostileOrb[]) orb.release();
+    this.beamWeapon.stop();
+    this.chainShock.clear();
 
     this.buildLayout(room);
 
@@ -479,13 +513,40 @@ export class GameScene extends Phaser.Scene implements EventHost {
     enemy.initBody();
     enemy.shoot = this.fireOrb;
     enemy.summon = this.summonMinions;
+    enemy.speedScale = this.player.stats.enemySpeed;
     return enemy;
   }
 
   /** A full pool drops the shot rather than growing mid fight. */
   private readonly fireOrb = (x: number, y: number, angle: number, speed: number, damage: number) => {
-    (this.orbs.get(x, y) as HostileOrb | null)?.fire(x, y, angle, speed, damage);
+    const orbSpeed = speed * this.player.stats.orbSpeed;
+    (this.orbs.get(x, y) as HostileOrb | null)?.fire(x, y, angle, orbSpeed, damage);
   };
+
+  // ---------------------------------------------------------------- strike host
+
+  enemyGroup(): readonly Enemy[] {
+    return this.enemies.getChildren() as Enemy[];
+  }
+
+  liveEnemies(): Enemy[] {
+    return (this.enemies.getChildren() as Enemy[]).filter((e) => e.active && e.harmful);
+  }
+
+  strikeEnemy(enemy: Enemy, damage: number, fromX: number, fromY: number, knockback: number) {
+    if (!enemy.active) return;
+    const slam = knockback > 0 ? this.player.stats.wallSlam : 0;
+    if (enemy.hit(damage, fromX, fromY, knockback, slam)) this.killEnemy(enemy);
+  }
+
+  /** Backwards, since a slam can kill and take the enemy out of the list. */
+  private applyWallSlams(enemies: readonly Enemy[]) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      const slam = enemy.slammed();
+      if (slam > 0) this.strikeEnemy(enemy, slam, enemy.x, enemy.y, 0);
+    }
+  }
 
   private killEnemy(enemy: Enemy) {
     const { x, y } = enemy;
@@ -494,7 +555,7 @@ export class GameScene extends Phaser.Scene implements EventHost {
     const rolls = enemy.def.cursed ? 2 : 1;
     const kinds: DropKind[] = [];
     for (let i = 0; i < rolls; i++) {
-      const roll = rollDrops(this.dropRng, this.luck);
+      const roll = rollDrops(this.dropRng, this.luck, this.player.stats.healOdds);
       this.luck = roll.luck;
       kinds.push(...roll.drops);
     }
@@ -601,7 +662,8 @@ export class GameScene extends Phaser.Scene implements EventHost {
 
   private grantDrop(kind: DropKind) {
     const player = this.player;
-    const next = applyDrop({ health: player.health, maxHealth: player.stats.maxHealth, currency: this.currency }, kind);
+    const state = { health: player.health, maxHealth: player.stats.maxHealth, currency: this.currency };
+    const next = applyDrop(state, kind, player.stats.currencyValue);
     player.health = next.health;
     this.currency = next.currency;
   }
@@ -676,13 +738,20 @@ export class GameScene extends Phaser.Scene implements EventHost {
 
   private grantItem(item: Item) {
     this.items.push(item);
-    this.player.setStats(this.currentStats());
+    this.refreshStats();
+    if (item.fullHeal) this.player.health = this.player.stats.maxHealth;
     this.showBanner(t(item.name), t(item.description));
   }
 
   private currentStats(): PlayerStats {
     const stats = computeStats(BASE_STATS, this.items);
     return { ...stats, maxHealth: stats.maxHealth - this.maxHealthLost, ...this.cheats.stats };
+  }
+
+  /** Recomputes the player's stats and passes on the ones enemies read. */
+  private refreshStats() {
+    this.player.setStats(this.currentStats());
+    for (const enemy of this.enemies.getChildren() as Enemy[]) enemy.speedScale = this.player.stats.enemySpeed;
   }
 
   // ---------------------------------------------------------------- event host
@@ -707,14 +776,14 @@ export class GameScene extends Phaser.Scene implements EventHost {
     const player = this.player;
     const paid = payAltar({ health: player.health, maxHealth: player.stats.maxHealth });
     this.maxHealthLost += paid.cost;
-    player.setStats(this.currentStats());
+    this.refreshStats();
     player.health = Phaser.Math.Clamp(paid.health, 0, player.stats.maxHealth);
     if (player.health <= 0 && !this.cheats.god) {
       this.onDeath('death.greed');
       return;
     }
     player.health = Math.max(1, player.health);
-    const [item] = rollRewards(rng, ITEMS, this.items, 1);
+    const [item] = rollRewards(rng, ITEMS, this.items, 1, this.depth);
     room.altarPaid = true;
     if (!item) return;
     this.roomItems.set(room, item);
@@ -727,7 +796,7 @@ export class GameScene extends Phaser.Scene implements EventHost {
   }
 
   placeRewardItem(room: RoomNode, rng: Rng): boolean {
-    const [item] = rollRewards(rng, ITEMS, this.items, 1);
+    const [item] = rollRewards(rng, ITEMS, this.items, 1, this.depth);
     if (!item) return false;
     this.roomItems.set(room, item);
     // The kill can land right on the center: don't grab it before reading it.
@@ -820,7 +889,7 @@ export class GameScene extends Phaser.Scene implements EventHost {
       },
       setStat: (name, value) => {
         this.cheats.stats[name] = value;
-        this.player.setStats(this.currentStats());
+        this.refreshStats();
       },
       spawn: (enemyId, count) => this.debugSpawn(enemyId, count),
       spawnBoss: () => this.debugSpawn(SHADOW_COLOSSUS.id, 1),
@@ -850,14 +919,14 @@ export class GameScene extends Phaser.Scene implements EventHost {
     const item = ITEMS.find((i) => i.id === itemId);
     if (!item) return;
     for (let i = 0; i < count; i++) this.items.push(item);
-    this.player.setStats(this.currentStats());
+    this.refreshStats();
   }
 
   private debugTake(itemId: string): boolean {
     const index = this.items.findLastIndex((i) => i.id === itemId);
     if (index < 0) return false;
     this.items.splice(index, 1);
-    this.player.setStats(this.currentStats());
+    this.refreshStats();
     return true;
   }
 

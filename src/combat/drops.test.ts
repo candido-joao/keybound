@@ -12,6 +12,11 @@ describe('healChance', () => {
     expect(healChance({ healMisses: 2 })).toBeCloseTo(DROP_ODDS.heal + 2 * DROP_ODDS.healPerMiss);
     expect(healChance({ healMisses: 1000 })).toBe(1);
   });
+
+  it('adds item bonuses, never below zero', () => {
+    expect(healChance(FRESH_LUCK, 0.04)).toBeCloseTo(DROP_ODDS.heal + 0.04);
+    expect(healChance(FRESH_LUCK, -1)).toBe(0);
+  });
 });
 
 describe('applyDrop', () => {
@@ -19,6 +24,10 @@ describe('applyDrop', () => {
 
   it('adds one currency', () => {
     expect(applyDrop(state, 'currency')).toEqual({ ...state, currency: 5 });
+  });
+
+  it('counts each coin at its value', () => {
+    expect(applyDrop(state, 'currency', 2).currency).toBe(6);
   });
 
   it('heals by the orb amount', () => {

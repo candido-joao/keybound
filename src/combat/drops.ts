@@ -22,9 +22,9 @@ export interface DropLuck {
 
 export const FRESH_LUCK: DropLuck = { healMisses: 0 };
 
-/** Heal orb odds grow with each kill that didn't drop one. */
-export function healChance(luck: DropLuck): number {
-  return Math.min(1, DROP_ODDS.heal + DROP_ODDS.healPerMiss * luck.healMisses);
+/** Heal orb odds grow with each kill that didn't drop one; items add `bonus`, which can be negative. */
+export function healChance(luck: DropLuck, bonus = 0): number {
+  return Math.max(0, Math.min(1, DROP_ODDS.heal + bonus + DROP_ODDS.healPerMiss * luck.healMisses));
 }
 
 /** The part of a run a pickup can change. */
@@ -34,17 +34,17 @@ export interface PickupState {
   currency: number;
 }
 
-/** State after picking up one drop. Healing never passes max HP. */
-export function applyDrop(state: PickupState, kind: DropKind): PickupState {
-  if (kind === 'currency') return { ...state, currency: state.currency + 1 };
+/** State after picking up one drop, each coin worth `coinValue`. Healing never passes max HP. */
+export function applyDrop(state: PickupState, kind: DropKind, coinValue = 1): PickupState {
+  if (kind === 'currency') return { ...state, currency: state.currency + coinValue };
   return { ...state, health: Math.min(state.maxHealth, state.health + HEAL_ORB_HP) };
 }
 
 /** What one kill drops, and the luck after it. */
-export function rollDrops(rng: Rng, luck: DropLuck): { drops: DropKind[]; luck: DropLuck } {
+export function rollDrops(rng: Rng, luck: DropLuck, healBonus = 0): { drops: DropKind[]; luck: DropLuck } {
   const drops: DropKind[] = [];
   if (rng.chance(DROP_ODDS.currency)) drops.push('currency');
-  if (!rng.chance(healChance(luck))) return { drops, luck: { healMisses: luck.healMisses + 1 } };
+  if (!rng.chance(healChance(luck, healBonus))) return { drops, luck: { healMisses: luck.healMisses + 1 } };
   drops.push('heal');
   return { drops, luck: FRESH_LUCK };
 }
