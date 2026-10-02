@@ -23,7 +23,7 @@ const EYE_OFFSETS = [
   { x: 5, y: 1 },
 ] as const;
 /** How much bigger the outline silhouette is than the body: about 2 px on each side of a 32 px sprite. */
-const OUTLINE_SCALE = 1.14;
+export const OUTLINE_SCALE = 1.14;
 
 /** After the transition, a short breather before the first furious dash. */
 const FURY_FIRST_DASH_MS = 800;

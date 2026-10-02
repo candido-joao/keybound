@@ -4,6 +4,7 @@ import { COLORS, GAME_H, GAME_W } from '../config';
 import { formatDuration } from '../core/run';
 import { t } from '../i18n';
 import { returnToTitle } from './navigation';
+import { hintKey, onTap } from './tap';
 import type { GameScene } from './GameScene';
 
 /** Keeps a key still held from the fight from skipping the summary. */
@@ -61,21 +62,32 @@ export class SummaryScene extends Phaser.Scene {
         color: COLORS.textDim,
       })
       .setOrigin(0.5);
-    this.add.text(cx, 430, t('summary.hint'), { ...style, fontSize: '14px', color: COLORS.textDim }).setOrigin(0.5);
+    const action = { ...style, fontSize: '14px', color: COLORS.textDim };
+    const buttons = [
+      this.add.text(cx - 190, 430, t(hintKey('summary.new-run')), action).setOrigin(0.5),
+      this.add.text(cx, 430, t(hintKey('summary.same-seed')), action).setOrigin(0.5),
+      this.add.text(cx + 190, 430, t(hintKey('summary.menu')), action).setOrigin(0.5),
+    ];
 
-    this.time.delayedCall(INPUT_DELAY_MS, () => this.bindKeys(game));
+    this.time.delayedCall(INPUT_DELAY_MS, () => this.bindInput(game, buttons));
   }
 
-  private bindKeys(game: GameScene) {
-    const keyboard = this.input.keyboard!;
-    keyboard.on('keydown', (event: KeyboardEvent) => {
+  private bindInput(game: GameScene, [newRun, sameSeed, menu]: Phaser.GameObjects.Text[]) {
+    onTap(newRun, () => this.run(() => this.restart(game, false)));
+    onTap(sameSeed, () => this.run(() => this.restart(game, true)));
+    onTap(menu, () => this.run(() => returnToTitle(this)));
+    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
       // Auto-repeat means the key was held since the fight, not pressed here.
       if (event.repeat) return;
       const action = this.actionFor(event.key, game);
-      if (!action || this.leaving) return;
-      this.leaving = true;
-      action();
+      if (action) this.run(action);
     });
+  }
+
+  private run(action: () => void) {
+    if (this.leaving) return;
+    this.leaving = true;
+    action();
   }
 
   private actionFor(key: string, game: GameScene): (() => void) | undefined {

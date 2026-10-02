@@ -12,8 +12,10 @@ import {
   itemPools,
   phaseEntries,
   pct,
+  swingEntry,
 } from './catalog';
 import { enemySprite, itemIcon, phaseShot } from './sprites';
+import { swingDemo } from './swingDemo';
 
 type Child = Node | string | undefined;
 
@@ -40,6 +42,7 @@ const NAV: readonly [string, MessageKey][] = [
   ['phases', 'wiki.nav.phases'],
   ['enemies', 'wiki.nav.enemies'],
   ['items', 'wiki.nav.items'],
+  ['key', 'wiki.nav.key'],
   ['events', 'wiki.nav.events'],
 ];
 
@@ -49,7 +52,7 @@ export function renderWiki(root: HTMLElement, onLocale: (locale: Locale) => void
   const phases = phaseEntries();
   root.replaceChildren(
     header(onLocale),
-    el('main', 'content', phasesSection(phases), enemiesSection(phases), itemsSection(), eventsSection()),
+    el('main', 'content', phasesSection(phases), enemiesSection(phases), itemsSection(), keySection(), eventsSection()),
     el('footer', 'footer', t('wiki.footer')),
   );
 }
@@ -273,6 +276,34 @@ function variantList(variants: readonly ItemVersion[]): HTMLElement {
       ),
     ),
   );
+}
+
+/** The key's swing: a looping demo beside its numbers and rules, all read from the game's tuning. */
+function keySection(): HTMLElement {
+  const { reach, arcDegrees, damagePct, lines } = swingEntry();
+  const stats = el(
+    'dl',
+    'stats',
+    stat(t('wiki.swing.reach'), t('wiki.swing.reach-value', { px: reach })),
+    stat(t('wiki.swing.arc'), t('wiki.swing.arc-value', { deg: arcDegrees })),
+    stat(t('wiki.swing.damage'), t('wiki.swing.damage-value', { pct: damagePct })),
+    stat(t('wiki.swing.cost'), t('wiki.swing.cost-value')),
+  );
+  const card = el(
+    'article',
+    'card skill',
+    el('div', 'demo-box', swingDemo(t('wiki.swing.demo'))),
+    el(
+      'div',
+      'card-body',
+      el('h4', undefined, t('wiki.swing.name')),
+      el('p', 'muted', t('wiki.swing.controls')),
+      stats,
+      el('ul', 'lines', ...lines.map((l) => el('li', undefined, line(l)))),
+    ),
+  );
+  card.id = 'skill-swing';
+  return section('key', 'wiki.nav.key', t('wiki.key.intro'), card);
 }
 
 /** Render room-event descriptions with stable anchors and the normal and boss event chances. */

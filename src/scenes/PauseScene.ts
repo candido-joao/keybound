@@ -3,7 +3,10 @@ import { summarizeItems } from '../combat/stats';
 import { COLORS, GAME_H, GAME_W } from '../config';
 import { LOCALE_NAMES, getLocale, nextLocale, t } from '../i18n';
 import { chooseLocale } from '../i18n/apply';
+import { nextStickMode } from '../input/pad';
+import { pad, setStickMode, usingTouch } from '../input/touch';
 import { returnToTitle } from './navigation';
+import { hintKey, onTap } from './tap';
 import type { GameScene } from './GameScene';
 
 /** Overlay launched by GameScene on Esc; GameScene stays paused underneath. */
@@ -34,20 +37,31 @@ export class PauseScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
     }
-    this.add
-      .text(cx, cy + 84, t('pause.language', { language: LOCALE_NAMES[getLocale()] }), {
-        ...style,
-        fontSize: '13px',
-        color: COLORS.textMuted,
-      })
-      .setOrigin(0.5);
-    this.add.text(cx, cy + 110, t('pause.hint'), { ...style, fontSize: '13px', color: COLORS.textDim }).setOrigin(0.5);
+    const muted = { ...style, fontSize: '13px', color: COLORS.textMuted };
+    const language = t(hintKey('pause.language'), { language: LOCALE_NAMES[getLocale()] });
+    onTap(this.add.text(cx, cy + 70, language, muted).setOrigin(0.5), () => this.cycleLocale());
+    // Only touch play has sticks to set.
+    if (usingTouch()) {
+      const sticks = t('pause.sticks', { mode: t(`sticks.${pad.mode}`) });
+      onTap(this.add.text(cx, cy + 98, sticks, muted).setOrigin(0.5), () => this.cycleStickMode());
+    }
+
+    const action = { ...style, fontSize: '14px', color: COLORS.textDim };
+    const row = cy + 140;
+    onTap(this.add.text(cx - 170, row, t(hintKey('pause.resume')), action).setOrigin(0.5), () => this.close());
+    onTap(this.add.text(cx, row, t(hintKey('pause.new-run')), action).setOrigin(0.5), () => this.close(true));
+    onTap(this.add.text(cx + 170, row, t(hintKey('pause.menu')), action).setOrigin(0.5), () => returnToTitle(this));
 
     const keyboard = this.input.keyboard!;
     keyboard.once('keydown-ESC', () => this.close());
     keyboard.once('keydown-R', () => this.close(true));
     keyboard.once('keydown-Q', () => returnToTitle(this));
     keyboard.once('keydown-L', () => this.cycleLocale());
+  }
+
+  private cycleStickMode() {
+    setStickMode(nextStickMode(pad.mode));
+    this.scene.restart();
   }
 
   private cycleLocale() {

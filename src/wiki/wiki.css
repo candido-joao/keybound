@@ -292,6 +292,23 @@ a {
   transition: opacity 0.2s;
 }
 
+.demo {
+  display: block;
+  width: 300px;
+  max-width: 100%;
+  height: auto;
+}
+
+/* The swing demo's stage, framed like an enemy card's sprite. */
+.demo-box {
+  flex: none;
+  align-self: flex-start;
+  max-width: 100%;
+  background: var(--panel-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
 .sprite-box {
   flex: none;
   align-self: flex-start;
@@ -448,6 +465,7 @@ a {
   }
 
   .sprite-box,
+  .demo-box,
   .icon-box {
     align-self: center;
   }

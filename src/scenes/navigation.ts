@@ -4,5 +4,6 @@ import type Phaser from 'phaser';
 export function returnToTitle(from: Phaser.Scene) {
   from.scene.stop('game');
   from.scene.stop('hud');
+  from.scene.stop('touch');
   from.scene.start('title');
 }

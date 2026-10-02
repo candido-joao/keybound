@@ -20,13 +20,16 @@ import { rollRewards } from '../combat/itemPool';
 import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, canCollect, rollDrops, withBossHeal } from '../combat/drops';
 import { inBlast, reviveHp, spotAwayFrom } from '../combat/behaviors';
+import { SWING, chargeDrive, inSwing, swingTouchesBox } from '../combat/swing';
 import {
+  BONE_PILE,
   ENEMIES,
   type EnemyDef,
   type ExplodeAttack,
   type SummonAttack,
   enemyForDepth,
   rollRoomEnemies,
+  walkAnimKey,
 } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
@@ -35,7 +38,8 @@ import { type RunCheats, type RunData, type RunStats, newRun } from '../core/run
 import type { DebugTarget } from '../debug/commands';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
-import { Enemy } from '../entities/Enemy';
+import { SWING_FX, SWING_FX_FRAME } from '../entities/keyArt';
+import { Enemy, OUTLINE_SCALE } from '../entities/Enemy';
 import { HostileOrb } from '../entities/HostileOrb';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 import {
@@ -57,7 +61,9 @@ import {
   rollRoomEvents,
   twinDef,
 } from '../floor/roomEvents';
+import { startsLocked } from '../floor/locks';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
+import { pad } from '../input/touch';
 import { BeamWeapon } from './BeamWeapon';
 import type { BossIntroData } from './BossIntroScene';
 import { ChainShock, type StrikeHost } from './ChainShock';
@@ -101,7 +107,9 @@ const BLAST_KNOCKBACK = 2;
 /** A fallen enemy that gets back up at `reviveAt` unless the player steps on it. */
 interface Pile {
   def: EnemyDef;
-  image: Phaser.GameObjects.Image;
+  image: Phaser.GameObjects.Sprite;
+  /** The body and, for an outlined enemy, its silhouette behind it: they rattle and fall together. */
+  parts: Phaser.GameObjects.Sprite[];
   reviveAt: number;
   rattling: boolean;
   /** Times the enemy under it has already got back up. */
@@ -130,6 +138,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   room!: RoomNode;
   items: Item[] = [];
   currency = 0;
+  /** Key swing charges; one comes back with each cleared room. */
+  drive = 0;
+  driveMax = 0;
   /** Heal orb odds carried across floors. */
   private luck!: DropLuck;
   /** Max HP traded away at blood altars this run. */
@@ -177,6 +188,10 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   private labelLocale?: Locale;
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private doorBlocks!: Phaser.Physics.Arcade.StaticGroup;
+  /** This room's closed doors by side, so a swing can open just the one it hits. */
+  private doorBlockAt = new Map<Dir, Phaser.Physics.Arcade.Sprite>();
+  /** Doors a swing opened mid fight; walking back into an uncleared room shuts them again. */
+  private openDoors = new Set<Dir>();
   private enemies!: Phaser.Physics.Arcade.Group;
   private bolts!: Phaser.Physics.Arcade.Group;
   /** Pool of enemy projectiles; orbs are released, never destroyed, until the scene restarts. */
@@ -228,6 +243,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.drops = [];
     this.leftDrops = new Map();
     this.currency = data.currency;
+    this.drive = data.drive;
+    this.driveMax = data.driveMax;
     this.luck = data.luck;
     this.maxHealthLost = data.maxHealthLost;
     this.dropRng = new Rng(`${this.seed}:drops:${this.depth}`);
@@ -239,6 +256,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.floor = generateFloor(new Rng(`${this.seed}:floor:${this.depth}`), this.depth);
     const events = rollRoomEvents(new Rng(`${this.seed}:events:${this.depth}`), this.floor.rooms.values());
     for (const [room, id] of events) room.event = id;
+    for (const room of this.floor.rooms.values()) room.locked = startsLocked(room, this.depth);
     this.eventDirector = new RoomEventDirector(this, this);
 
     const rewardRooms = [...this.floor.rooms.values()].filter((r) => r.type === 'treasure' || r.type === 'boss');
@@ -271,8 +289,10 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
     this.scene.bringToTop('hud');
+    if (!this.scene.isActive('touch')) this.scene.launch('touch');
+    this.scene.bringToTop('touch');
 
-    this.input.keyboard!.on('keydown-ESC', () => this.pause());
+    this.input.keyboard!.on('keydown-ESC', () => this.requestPause());
   }
 
   /** A new phase is announced by name, with the floor under it. */
@@ -290,8 +310,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     return !this.transitioning && !this.gameOver && !this.inBossIntro;
   }
 
-  private pause() {
+  /** Esc or the touch pause button; ignored when an overlay can't open. */
+  requestPause() {
     if (!this.canPause) return;
+    // A thumb still on a stick must not keep the player walking after the pause.
+    pad.releaseAll();
     this.scene.pause();
     this.scene.launch('pause');
     this.scene.bringToTop('pause');
@@ -348,6 +371,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.clock.tick(delta);
     const time = this.clock.now;
     this.player.move();
+    if (this.player.wantsSwing()) this.swing();
     const shot = this.player.tryShoot(time);
     for (const spec of shot.bolts) {
       const bolt = new Bolt(this, spec);
@@ -378,7 +402,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.eventDirector.update();
 
     if (!this.room.cleared && this.enemiesLeft() === 0 && !this.eventDirector.holdsClear()) this.clearRoom();
-    if (this.room.cleared) this.checkDoorExit();
+    if (this.room.cleared || this.openDoors.size > 0) this.checkDoorExit();
   }
 
   private updateBossHealth(enemies: readonly Enemy[]) {
@@ -418,10 +442,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.roomDecor.forEach((o) => o.destroy());
     this.roomDecor = [];
     this.pedestals = [];
-    for (const pile of this.piles) pile.image.destroy();
+    for (const pile of this.piles) for (const part of pile.parts) part.destroy();
     this.piles = [];
     this.walls.clear(true, true);
     this.doorBlocks.clear(true, true);
+    this.doorBlockAt.clear();
+    this.openDoors.clear();
     this.enemies.clear(true, true);
     this.bolts.clear(true, true);
     for (const orb of this.orbs.getChildren() as HostileOrb[]) orb.release();
@@ -477,11 +503,24 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
           continue;
         }
 
-        if (!room.cleared) this.doorBlocks.create(tileX(col), tileY(row), 'door').setDepth(1);
         const neighbor = this.floor.neighbor(room, door)!;
+        if (!room.cleared || neighbor.locked) this.closeDoor(door, col, row, neighbor);
         this.roomDecor.push(this.doorMarker(col, row, door, neighbor));
       }
     }
+  }
+
+  private closeDoor(dir: Dir, col: number, row: number, neighbor: RoomNode) {
+    const texture = neighbor.locked ? 'door-locked' : 'door';
+    const block = this.doorBlocks.create(tileX(col), tileY(row), texture) as Phaser.Physics.Arcade.Sprite;
+    this.doorBlockAt.set(dir, block.setDepth(1));
+  }
+
+  private openDoor(dir: Dir) {
+    const block = this.doorBlockAt.get(dir);
+    if (!block) return;
+    this.doorBlockAt.delete(dir);
+    this.doorBlocks.remove(block, true, true);
   }
 
   /** Small colored lintel so boss/treasure doors read at a glance, and a cursed room can be avoided. */
@@ -609,6 +648,65 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     if (enemy.hit(damage, fromX, fromY, knockback, slam)) this.killEnemy(enemy);
   }
 
+  /**
+   * Spends a drive charge on a short blow from the key's grip: it shoves and lightly hurts what
+   * it touches, and opens any door it hits, locked or held shut by the fight.
+   */
+  private swing() {
+    if (this.drive < 1 || this.player.swinging) return;
+    this.drive--;
+    const aim = this.player.startSwing();
+    const { x, y, stats } = this.player;
+    this.showSwing(x, y, aim);
+    const enemies = this.enemies.getChildren() as Enemy[];
+    // Backwards, since a hit can kill and take the enemy out of the list.
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      if (!enemy.active || !enemy.hittable) continue;
+      const radius = (enemy.body as Phaser.Physics.Arcade.Body).halfWidth;
+      if (!inSwing(enemy.x - x, enemy.y - y, aim, radius)) continue;
+      this.strikeEnemy(enemy, stats.damage * SWING.damageShare, x, y, SWING.knockback * stats.knockback);
+    }
+    for (const [dir, block] of [...this.doorBlockAt]) {
+      if (swingTouchesBox(block.x - x, block.y - y, aim, TILE / 2, TILE / 2)) this.unlockDoor(dir);
+    }
+  }
+
+  /** The crescent rides the fan's far edge, turned to the aim. */
+  private showSwing(x: number, y: number, aim: number) {
+    if (!this.textures.exists(SWING_FX)) {
+      this.showSwingArc(x, y, aim);
+      return;
+    }
+    const scale = (SWING.reach * 2) / SWING_FX_FRAME.height;
+    // The sheet's frames are right-aligned: their front edge sits half a frame ahead of center.
+    const ahead = SWING.reach - (SWING_FX_FRAME.width / 2) * scale;
+    const fx = this.add
+      .sprite(x + Math.cos(aim) * ahead, y + Math.sin(aim) * ahead, SWING_FX)
+      .setRotation(aim)
+      .setScale(scale)
+      .setDepth(11);
+    fx.play(SWING_FX).once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+  }
+
+  /** Fallback without the sheet: a fading stroke along the fan's edge. */
+  private showSwingArc(x: number, y: number, aim: number) {
+    const arc = this.add.graphics().setDepth(11);
+    arc.lineStyle(6, COLORS.bolt, 0.9);
+    arc.beginPath();
+    arc.arc(x, y, SWING.reach - 6, aim - SWING.arc / 2, aim + SWING.arc / 2);
+    arc.strokePath();
+    this.tweens.add({ targets: arc, alpha: 0, duration: SWING.durationMs, onComplete: () => arc.destroy() });
+  }
+
+  private unlockDoor(dir: Dir) {
+    const neighbor = this.floor.neighbor(this.room, dir);
+    if (neighbor) neighbor.locked = false;
+    this.openDoor(dir);
+    this.openDoors.add(dir);
+    this.cameras.main.shake(90, 0.004);
+  }
+
   /** Backwards, since a slam can kill and take the enemy out of the list. */
   private applyWallSlams(enemies: readonly Enemy[]) {
     for (let i = enemies.length - 1; i >= 0; i--) {
@@ -651,8 +749,22 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   private dropPile(def: EnemyDef, x: number, y: number, revivals: number) {
-    const image = this.add.image(x, y, 'bone-pile').setDepth(3);
-    this.piles.push({ def, image, reviveAt: this.clock.now + def.revive!.delayMs, rattling: false, revivals });
+    const image = this.add.sprite(x, y, BONE_PILE).setDepth(3);
+    const parts = [image];
+    // A cursed skeleton's bones keep the darkness that cursed it.
+    if (def.outline !== undefined) {
+      const outline = this.add
+        .sprite(x, y, BONE_PILE)
+        .setTintMode(Phaser.TintModes.FILL)
+        .setTint(def.outline)
+        .setScale(OUTLINE_SCALE)
+        .setAlpha(0.9)
+        .setDepth(image.depth - 0.1);
+      parts.push(outline);
+    }
+    const anim = walkAnimKey(BONE_PILE);
+    if (this.anims.exists(anim)) for (const part of parts) part.play(anim);
+    this.piles.push({ def, image, parts, reviveAt: this.clock.now + def.revive!.delayMs, rattling: false, revivals });
   }
 
   /** Stepping on a pile finishes it; left alone, it rattles and gets back up with part of its HP. */
@@ -660,7 +772,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const stomp = STOMP_RADIUS * STOMP_RADIUS;
     for (let i = this.piles.length - 1; i >= 0; i--) {
       const pile = this.piles[i];
-      const { image, def } = pile;
+      const { image, parts, def } = pile;
       if (Phaser.Math.Distance.Squared(image.x, image.y, this.player.x, this.player.y) < stomp) {
         this.piles.splice(i, 1);
         this.crushPile(pile);
@@ -668,12 +780,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       }
       if (!pile.rattling && time >= pile.reviveAt - PILE_RATTLE_MS) {
         pile.rattling = true;
-        this.tweens.add({ targets: image, x: image.x + 2, duration: 50, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: parts, x: image.x + 2, duration: 50, yoyo: true, repeat: -1 });
       }
       if (time < pile.reviveAt) continue;
       this.piles.splice(i, 1);
-      this.tweens.killTweensOf(image);
-      image.destroy();
+      this.tweens.killTweensOf(parts);
+      for (const part of parts) part.destroy();
       const enemy = this.spawnEnemy(def, image.x, image.y, this.dropRng.next() * 1000);
       enemy.hp = reviveHp(def.hp, def.revive!.hpShare);
       enemy.revivals = pile.revivals + 1;
@@ -681,14 +793,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   private crushPile(pile: Pile) {
-    const { image, def } = pile;
-    this.tweens.killTweensOf(image);
+    const { image, parts, def } = pile;
+    this.tweens.killTweensOf(parts);
     this.tweens.add({
-      targets: image,
+      targets: parts,
       scaleY: 0.2,
       alpha: 0,
       duration: 160,
-      onComplete: () => image.destroy(),
+      onComplete: () => parts.forEach((part) => part.destroy()),
     });
     this.reward(def, image.x, image.y);
   }
@@ -764,7 +876,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   private clearRoom() {
     this.room.cleared = true;
     this.roomsCleared++;
-    this.doorBlocks.clear(true, true);
+    this.drive = chargeDrive(this.drive, this.driveMax);
+    // Locked doors stay shut: only a swing opens them.
+    for (const dir of [...this.doorBlockAt.keys()]) {
+      if (!this.floor.neighbor(this.room, dir)?.locked) this.openDoor(dir);
+    }
     this.eventDirector.onClear(this.room);
     if (this.room.type === 'boss') this.spawnBossRewards(this.room);
   }
@@ -774,7 +890,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     if (!dir) return;
 
     const next = this.floor.neighbor(this.room, dir);
-    if (!next) return;
+    if (!next || this.doorBlockAt.has(dir)) return;
 
     this.transitioning = true;
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
@@ -1043,6 +1159,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       itemIds: this.items.map((i) => i.id),
       health: this.player.health,
       currency: this.currency,
+      drive: this.drive,
+      driveMax: this.driveMax,
       luck: this.luck,
       maxHealthLost: this.maxHealthLost,
       stats: this.runStats(),
@@ -1080,6 +1198,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       },
       setGod: (on) => {
         this.cheats.god = on;
+      },
+      drive: () => this.drive,
+      driveMax: () => this.driveMax,
+      setDrive: (charges) => {
+        this.driveMax = Math.max(this.driveMax, charges);
+        this.drive = charges;
       },
       setStat: (name, value) => {
         this.cheats.stats[name] = value;
@@ -1184,6 +1308,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.endTitle = title;
     this.gameOver = true;
     this.physics.pause();
+    pad.releaseAll();
     this.scene.launch('summary');
     this.scene.bringToTop('summary');
   }

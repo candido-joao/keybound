@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import { BEAM, beamChargeMs, chargeStage, isContinuousBeam, releasePower } from '../combat/beam';
+import { SWING, swingDirection } from '../combat/swing';
 import { directionOffset, fanAngle, shotsInDirection } from '../combat/volley';
 import { type PlayerStats, boltRangeOf } from '../combat/stats';
 import type { GameClock } from '../core/clock';
+import { pad } from '../input/touch';
 import type { BoltSpec } from './Bolt';
+import { KEY_ART_PIVOT } from './keyArt';
 import { HERO_FRAME_H, HERO_FRAME_W, heroIdleFrame, heroRow, heroWalkAnim } from './heroSheet';
 
 type Keys = Record<'W' | 'A' | 'S' | 'D' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', Phaser.Input.Keyboard.Key>;
@@ -28,8 +31,7 @@ export const KEY_ICON_ART = 'key-icon-art';
 export const HERO_PORTRAIT_ART = 'hero-portrait-art';
 /** 8-direction walk sheet; the baked 'player' stands in when it's missing. */
 export const HERO_SHEET = 'hero-sheet';
-/** Pivot at the center of each sprite's ring guard, where the hand holds it. */
-const KEY_ART_PIVOT = 0.28;
+/** Pivot at the center of the baked key's ring guard; the art's own lives in keyArt. */
 const KEY_FALLBACK_PIVOT = 0.15;
 /** Share of the gap to the target velocity closed each frame. */
 const GRIP = 0.22;
@@ -37,6 +39,8 @@ const GRIP = 0.22;
 const CHARGE_FLASH_MS = 80;
 /** Fully charged, the key trembles this many px either way. */
 const CHARGE_TREMBLE_PX = 1;
+/** The swing sweeps the key from one edge of its fan to the other. */
+const SWING_HALF_ARC = SWING.arc / 2;
 
 /** What firing produced this frame: bolts, a beam, or neither. */
 export interface ShotOutput {
@@ -73,6 +77,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private chargeStageShown = 0;
   private keyFlashUntil = 0;
   private keyFlashing = false;
+  /** Clock time the current swing began; -1 when not swinging. */
+  private swingStartAt = -1;
+  /** Set by the Space keydown itself, so a press released within the same frame still counts. */
+  private swingQueued = false;
 
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, stats: PlayerStats) {
     const animated = scene.textures.exists(HERO_SHEET);
@@ -92,6 +100,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.keyWeapon = addKeyImage(scene, x, y).setDepth(KEY_DEPTH);
     this.keys = scene.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as Keys;
+    // Key capture keeps Space from scrolling the page.
+    scene.input.keyboard!.addKey('SPACE');
+    scene.input.keyboard!.on('keydown-SPACE', (event: KeyboardEvent) => {
+      if (!event.repeat) this.swingQueued = true;
+    });
   }
 
   setStats(stats: PlayerStats) {
@@ -117,9 +130,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   move() {
     const k = this.keys;
-    const ix = (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0);
-    const iy = (k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0);
-    const len = Math.hypot(ix, iy) || 1;
+    // Keys give full steps; the stick also gives partial ones, which walk slower.
+    const ix = clampAxis((k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0) + pad.moveX);
+    const iy = clampAxis((k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0) + pad.moveY);
+    const len = Math.max(1, Math.hypot(ix, iy));
     const body = this.body as Phaser.Physics.Arcade.Body;
 
     // Lerp toward target velocity: a little slide, like Isaac. Slide only loosens the stop.
@@ -134,11 +148,42 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(this.invulnerable ? (Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1) : 1);
   }
 
-  /** Arrow keys aim and fire. Returns what to spawn this frame. */
-  tryShoot(time: number): ShotOutput {
+  /** Space or the touch swing button, once per press. Both are read so neither press lingers. */
+  wantsSwing(): boolean {
+    const key = this.swingQueued;
+    this.swingQueued = false;
+    const touch = pad.consume('swing');
+    return key || touch;
+  }
+
+  get swinging(): boolean {
+    return this.swingStartAt >= 0 && this.clock.now - this.swingStartAt < SWING.durationMs;
+  }
+
+  /**
+   * Starts the swing's look, turns the aim to its direction and returns it: the aim while
+   * shooting, else the way the player walks. GameScene resolves what it hits. Call after `move`,
+   * which reads the walk.
+   */
+  startSwing(): number {
+    const [sx, sy] = this.shootAxes();
+    this.swingStartAt = this.clock.now;
+    // The key stays where it swung: the swing becomes the aim until the next shot sets one.
+    this.aim = swingDirection(sx, sy, this.moveX, this.moveY, axisAim(sx, sy) ?? this.aim);
+    return this.aim;
+  }
+
+  /** Arrow keys and the aim stick, each axis -1, 0 or 1. */
+  private shootAxes(): [number, number] {
     const k = this.keys;
-    const sx = (k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0);
-    const sy = (k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0);
+    const sx = Math.sign((k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0) + pad.aimX);
+    const sy = Math.sign((k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0) + pad.aimY);
+    return [sx, sy];
+  }
+
+  /** Arrow keys or the aim stick aim and fire. Returns what to spawn this frame. */
+  tryShoot(time: number): ShotOutput {
+    const [sx, sy] = this.shootAxes();
     const firing = sx !== 0 || sy !== 0;
     this.aim = axisAim(sx, sy) ?? this.aim;
 
@@ -289,10 +334,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.x + Math.cos(this.aim) * reach + side + tremble,
       this.y + KEY_HAND_Y * scale + Math.sin(this.aim) * reach - tremble,
     );
-    this.keyWeapon.setRotation(this.aim);
+    this.keyWeapon.setRotation(this.aim + this.swingOffset());
     this.keyWeapon.setFlipY(Math.cos(this.aim) < -0.01);
     this.keyWeapon.setAlpha(this.alpha);
     this.flashKey(this.clock.now < this.keyFlashUntil);
+  }
+
+  /** Angle off the aim during a swing: from one edge of the hitbox to the other. */
+  private swingOffset(): number {
+    if (!this.swinging) return 0;
+    const progress = (this.clock.now - this.swingStartAt) / SWING.durationMs;
+    // Fast out of the wind-up, settling at the far edge: reads as a slash, not a turn.
+    const eased = 1 - (1 - progress) ** 3;
+    return (eased * 2 - 1) * SWING_HALF_ARC;
   }
 
   /** Paints the key white while a charge stage flashes; only touches the tint when that changes. */
@@ -314,8 +368,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   teleport(x: number, y: number) {
     this.setPosition(x, y);
     (this.body as Phaser.Physics.Arcade.Body).reset(x, y);
-    // A charge doesn't carry through a door.
+    // A charge doesn't carry through a door, nor a swing pressed mid transition.
     this.endCharge();
+    this.swingQueued = false;
+    pad.consume('swing');
     this.updateKeyWeapon();
   }
 
@@ -328,6 +384,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 export function addKeyImage(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Image {
   if (scene.textures.exists(KEY_ART)) return scene.add.image(x, y, KEY_ART).setOrigin(KEY_ART_PIVOT, 0.5);
   return scene.add.image(x, y, 'key').setOrigin(KEY_FALLBACK_PIVOT, 0.5);
+}
+
+/** Caps combined keyboard and stick input at full strength while preserving partial movement. */
+function clampAxis(value: number): number {
+  return Math.max(-1, Math.min(1, value));
 }
 
 /** Isaac shoots in 4 directions; on diagonals the current aim holds, so the last pressed axis wins. */

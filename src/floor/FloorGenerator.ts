@@ -26,6 +26,8 @@ export interface RoomNode {
   altarPaid?: boolean;
   /** Set when the floor's events are rolled. */
   event?: RoomEventId;
+  /** Every door into it stays shut until a key swing unlocks one; see `startsLocked`. */
+  locked?: boolean;
 }
 
 export class Floor {

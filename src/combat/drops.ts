@@ -1,5 +1,5 @@
 import type { Rng } from '../core/rng';
-import { DROP_ODDS, HEAL_ORB_HP } from './balance';
+import { DROP_ODDS, HEAL_ORB_SHARE } from './balance';
 
 export type DropKind = 'currency' | 'heal';
 
@@ -45,10 +45,15 @@ export function canCollect(kind: DropKind, healthFull: boolean): boolean {
   return kind !== 'heal' || !healthFull;
 }
 
+/** HP one heal orb restores: a share of max HP, so it scales with HP items. */
+export function healOrbHp(maxHealth: number): number {
+  return Math.ceil(maxHealth * HEAL_ORB_SHARE);
+}
+
 /** State after picking up one drop, each coin worth `coinValue`. Healing never passes max HP. */
 export function applyDrop(state: PickupState, kind: DropKind, coinValue = 1): PickupState {
   if (kind === 'currency') return { ...state, currency: state.currency + coinValue };
-  return { ...state, health: Math.min(state.maxHealth, state.health + HEAL_ORB_HP) };
+  return { ...state, health: Math.min(state.maxHealth, state.health + healOrbHp(state.maxHealth)) };
 }
 
 /** What one kill drops, and the luck after it. */

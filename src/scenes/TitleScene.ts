@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
-import { COLORS, GAME_W } from '../config';
+import { COLORS, GAME_H, GAME_W } from '../config';
 import { SEED_MAX_LENGTH, normalizeSeed } from '../core/rng';
 import { newRun } from '../core/run';
 import { KEY_TITLE_ART } from '../entities/Player';
 import { LOCALE_NAMES, getLocale, nextLocale, t } from '../i18n';
 import { chooseLocale } from '../i18n/apply';
+import { usingTouch } from '../input/touch';
+import { hintKey, onTap } from './tap';
 
 interface TitleData {
   /** Kept across the restart that redraws the screen in a new language. */
@@ -12,6 +14,15 @@ interface TitleData {
 }
 
 const CURSOR_BLINK_MS = 450;
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const SEED_BOX: Box = { x: GAME_W / 2, y: 282, w: 260, h: 38 };
 
 export class TitleScene extends Phaser.Scene {
   private seedInput = '';
@@ -36,23 +47,25 @@ export class TitleScene extends Phaser.Scene {
     this.add
       .text(cx, 250, t('title.seed-label'), { ...style, fontSize: '13px', color: COLORS.textMuted })
       .setOrigin(0.5);
-    this.add.rectangle(cx, 282, 260, 38, 0x000000, 0.5).setStrokeStyle(2, COLORS.wallEdge);
-    this.seedText = this.add.text(cx, 282, '', { ...style, fontSize: '20px' }).setOrigin(0.5);
+    const { x, y, w, h } = SEED_BOX;
+    this.add.rectangle(x, y, w, h, 0x000000, 0.5).setStrokeStyle(2, COLORS.wallEdge);
+    this.addSeedField();
+    this.seedText = this.add.text(x, y, '', { ...style, fontSize: '20px' }).setOrigin(0.5);
     this.add
-      .text(cx, 318, t('title.seed-hint'), { ...style, fontSize: '12px', color: COLORS.textMuted })
+      .text(cx, 318, t(hintKey('title.seed-hint')), { ...style, fontSize: '12px', color: COLORS.textMuted })
       .setOrigin(0.5);
 
-    const start = this.add.text(cx, 380, t('title.start'), { ...style, fontSize: '22px' }).setOrigin(0.5);
+    const start = this.add.text(cx, 380, t(hintKey('title.start')), { ...style, fontSize: '22px' }).setOrigin(0.5);
+    onTap(start, () => this.startRun());
     this.tweens.add({ targets: start, alpha: 0.4, duration: 700, yoyo: true, repeat: -1 });
 
-    this.add.text(cx, 470, t('title.controls'), { ...style, fontSize: '13px', color: COLORS.textDim }).setOrigin(0.5);
-    this.add
-      .text(cx, 500, `${t('title.language', { language: LOCALE_NAMES[getLocale()] })}   ·   ${t('title.wiki')}`, {
-        ...style,
-        fontSize: '13px',
-        color: COLORS.textMuted,
-      })
-      .setOrigin(0.5);
+    const controls = usingTouch() ? 'title.controls-touch' : 'title.controls';
+    this.add.text(cx, 470, t(controls), { ...style, fontSize: '13px', color: COLORS.textDim }).setOrigin(0.5);
+    const muted = { ...style, fontSize: '13px', color: COLORS.textMuted };
+    const language = t(hintKey('title.language'), { language: LOCALE_NAMES[getLocale()] });
+    onTap(this.add.text(cx - 24, 500, language, muted).setOrigin(1, 0.5), () => this.cycleLocale());
+    this.add.text(cx, 500, '·', muted).setOrigin(0.5);
+    onTap(this.add.text(cx + 24, 500, t(hintKey('title.wiki')), muted).setOrigin(0, 0.5), () => this.openWiki());
 
     this.drawSeed();
     this.time.addEvent({ delay: CURSOR_BLINK_MS, loop: true, callback: () => this.blink() });
@@ -76,11 +89,55 @@ export class TitleScene extends Phaser.Scene {
   /** Dispatch title shortcuts or normalize seed input while respecting the seed length limit. */
   private onKey(event: KeyboardEvent) {
     if (event.key === 'Enter') return this.startRun();
+    // The seed field takes its own typing, from the phone's keyboard.
+    if (event.target instanceof HTMLInputElement) return;
     if (event.key === 'Tab') return this.cycleLocale();
     if (event.key === 'F1') return this.openWiki();
     if (event.key === 'Backspace') return this.setSeedInput(this.seedInput.slice(0, -1));
     if (event.key.length !== 1 || this.seedInput.length >= SEED_MAX_LENGTH) return;
     this.setSeedInput(normalizeSeed(this.seedInput + event.key));
+  }
+
+  /**
+   * Phones only open their keyboard when a real input is tapped, so a see-through one lies
+   * over the seed box and takes the typing; the canvas keeps drawing the seed. It goes away
+   * with the scene.
+   */
+  private addSeedField() {
+    const field = document.createElement('input');
+    Object.assign(field, { type: 'text', maxLength: SEED_MAX_LENGTH, autocomplete: 'off', spellcheck: false });
+    field.setAttribute('autocapitalize', 'characters');
+    field.setAttribute('enterkeyhint', 'go');
+    // 16 px keeps iOS from zooming in on focus.
+    field.style.cssText = 'position:fixed;opacity:0;font-size:16px;border:0;padding:0;margin:0';
+    // Keys typed on the canvas change the seed too; pick it up when the field takes over.
+    field.addEventListener('focus', () => (field.value = this.seedInput));
+    field.addEventListener('input', () => {
+      field.value = normalizeSeed(field.value);
+      this.setSeedInput(field.value);
+    });
+    document.body.append(field);
+
+    const place = () => this.placeOver(field, SEED_BOX);
+    place();
+    this.scale.on('resize', place);
+    this.events.once('shutdown', () => {
+      this.scale.off('resize', place);
+      field.remove();
+    });
+  }
+
+  /** Lines an HTML element up with a box in game coordinates, wherever the canvas is scaled to. */
+  private placeOver(element: HTMLElement, box: Box) {
+    const bounds = this.scale.canvasBounds;
+    const sx = bounds.width / GAME_W;
+    const sy = bounds.height / GAME_H;
+    Object.assign(element.style, {
+      left: `${bounds.left + (box.x - box.w / 2) * sx}px`,
+      top: `${bounds.top + (box.y - box.h / 2) * sy}px`,
+      width: `${box.w * sx}px`,
+      height: `${box.h * sy}px`,
+    });
   }
 
   private setSeedInput(value: string) {
@@ -114,6 +171,12 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private startRun() {
+    // Phones hide the browser bars only in fullscreen, and only from a tap or key press like this one.
+    if (usingTouch() && !this.scale.isFullscreen) {
+      // Keep the seed field and rotation overlay in fullscreen alongside the canvas.
+      this.scale.fullscreenTarget = document.documentElement;
+      this.scale.startFullscreen();
+    }
     this.scene.start('game', newRun(this.seedInput || undefined));
   }
 }
