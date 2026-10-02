@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { LOCK_FROM_DEPTH, startsLocked } from './locks';
 
 describe('startsLocked', () => {
-  it('locks treasure rooms from the second floor on', () => {
+  it('locks treasure rooms and shops from the second floor on', () => {
     expect(startsLocked({ type: 'treasure' }, 1)).toBe(false);
     expect(startsLocked({ type: 'treasure' }, LOCK_FROM_DEPTH)).toBe(true);
+    expect(startsLocked({ type: 'shop' }, 1)).toBe(false);
+    expect(startsLocked({ type: 'shop' }, LOCK_FROM_DEPTH)).toBe(true);
   });
 
   it('never locks other rooms', () => {

@@ -17,6 +17,7 @@ import {
 } from '../config';
 import { ITEMS, addItemIcon } from '../combat/items';
 import { rollRewards } from '../combat/itemPool';
+import { SHOP, type Ware, type Wallet, buy, canBuy, shopWares } from '../combat/shop';
 import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance';
 import { DROPS, type DropKind, type DropLuck, applyDrop, canCollect, rollDrops, withBossHeal } from '../combat/drops';
 import { inBlast, reviveHp, spotAwayFrom } from '../combat/behaviors';
@@ -37,7 +38,7 @@ import { Rng } from '../core/rng';
 import { type RunCheats, type RunData, type RunStats, newRun } from '../core/run';
 import type { DebugTarget } from '../debug/commands';
 import { Bolt } from '../entities/Bolt';
-import { Player } from '../entities/Player';
+import { KEY_ICON_ART, Player } from '../entities/Player';
 import { SWING_FX, SWING_FX_FRAME } from '../entities/keyArt';
 import { Enemy, OUTLINE_SCALE } from '../entities/Enemy';
 import { HostileOrb } from '../entities/HostileOrb';
@@ -116,6 +117,11 @@ interface Pile {
   revivals: number;
 }
 
+/** Tiles between shop pedestals. */
+const SHOP_SPACING = 3;
+/** How long a refused price stays red. */
+const REFUSE_FLASH_MS = 400;
+
 /** A pedestal that must be stepped away from first arms beyond this distance. */
 const PEDESTAL_ARM_RANGE = TILE;
 
@@ -125,6 +131,7 @@ const DOOR_MARKER: Record<RoomType, number> = {
   normal: COLORS.doorMarker,
   treasure: COLORS.treasure,
   boss: COLORS.boss,
+  shop: COLORS.shop,
 };
 
 export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
@@ -176,11 +183,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
   /** Item each reward room holds, fixed per floor so revisits and route don't change it. */
   private roomItems = new Map<RoomNode, Item>();
+  /** What each shop on this floor has already sold. */
+  private shopSold = new Map<RoomNode, Set<Ware>>();
   /** Pedestals in this room whose label shows only while the player is near. */
   private pedestals: {
     x: number;
     y: number;
-    item: Item;
+    /** Rebuilt when the language changes under the pedestal. */
+    text: () => string[];
     label: Phaser.GameObjects.Text;
     pickup: Phaser.Physics.Arcade.Collider;
   }[] = [];
@@ -269,6 +279,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     );
     this.roomItems = new Map();
     rewardRooms.forEach((room, i) => rewards[i] && this.roomItems.set(room, rewards[i]));
+    this.stockShops();
 
     this.cameras.main.setBackgroundColor(this.phase.palette.background);
     this.walls = this.physics.add.staticGroup();
@@ -465,6 +476,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     if (room.type === 'treasure' && !room.itemTaken) this.spawnItem(room, DOOR_ROW);
     if (room.event === 'miniboss' && room.cleared && !room.itemTaken) this.spawnItem(room, DOOR_ROW);
     if (room.type === 'boss' && room.cleared) this.spawnBossRewards(room);
+    if (room.type === 'shop') this.spawnShop(room);
   }
 
   private spawnBossRewards(room: RoomNode) {
@@ -1002,15 +1014,19 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       this.grantItem(item);
     });
     pickup.active = !armWhenAway;
-    const entry = { x, y, item, label, pickup };
+    const entry = { x, y, text: () => pedestalText(item), label, pickup };
     this.pedestals.push(entry);
     this.roomDecor.push(pickup);
   }
 
   /** Name and hint only; the exact effect shows once the item is taken. */
   private pedestalLabel(x: number, y: number, item: Item): Phaser.GameObjects.Text {
+    return this.labelText(x, y, pedestalText(item));
+  }
+
+  private labelText(x: number, y: number, lines: string[]): Phaser.GameObjects.Text {
     return this.add
-      .text(x, y, pedestalText(item), {
+      .text(x, y, lines, {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: COLORS.text,
@@ -1027,7 +1043,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const locale = getLocale();
     if (locale !== this.labelLocale) {
       this.labelLocale = locale;
-      for (const p of this.pedestals) p.label.setText(pedestalText(p.item));
+      for (const p of this.pedestals) p.label.setText(p.text());
     }
 
     const range = LABEL_RANGE * LABEL_RANGE;
@@ -1038,6 +1054,107 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       if (p.label.visible !== near) p.label.setVisible(near);
       if (!p.pickup.active && distance > armRange) p.pickup.active = true;
     }
+  }
+
+  // ---------------------------------------------------------------- shop
+
+  /** Each shop's item, from its own stream so the treasure and boss rolls stay as they were. */
+  private stockShops() {
+    this.shopSold = new Map();
+    const rng = new Rng(`${this.seed}:shop:${this.depth}`);
+    for (const room of this.floor.rooms.values()) {
+      if (room.type !== 'shop') continue;
+      const [item] = rollRewards(rng, ITEMS, this.items, 1, this.depth);
+      if (item) this.roomItems.set(room, item);
+    }
+  }
+
+  /** Wares in a row across the room; what was bought stays gone. */
+  private spawnShop(room: RoomNode) {
+    const sold = this.shopSold.get(room) ?? new Set<Ware>();
+    this.shopSold.set(room, sold);
+    const wares = shopWares(this.driveMax).filter((w) => !sold.has(w) && (w !== 'item' || !room.itemTaken));
+    wares.forEach((ware, i) => {
+      const col = DOOR_COL + (i - (wares.length - 1) / 2) * SHOP_SPACING;
+      this.placeWare(room, ware, col, DOOR_ROW - 1, () => sold.add(ware));
+    });
+  }
+
+  /**
+   * A pedestal with a price. Walking into it buys the ware when the player can pay and it would
+   * do something; otherwise the price flashes and nothing happens.
+   */
+  private placeWare(room: RoomNode, ware: Ware, col: number, row: number, onSold: () => void) {
+    const item = this.roomItems.get(room);
+    if (ware === 'item' && !item) return;
+    const x = tileX(col);
+    const y = tileY(row);
+    const pedestal = this.add.image(x, y + 10, 'pedestal').setDepth(3);
+    const icon = this.wareIcon(ware, item, x, y - 12).setDepth(4);
+    this.tweens.add({ targets: icon, y: y - 18, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    this.physics.add.existing(pedestal, true);
+    const text = () => [...wareText(ware, item), t('shop.price', { n: SHOP.prices[ware] })];
+    const label = this.labelText(x, y - 44, text());
+    this.roomDecor.push(pedestal, icon, label);
+
+    let refusedAt = -Infinity;
+    const pickup = this.physics.add.overlap(this.player, pedestal, () => {
+      const wallet = this.wallet();
+      if (!canBuy(ware, wallet)) {
+        // Once per bump, not on every frame of it.
+        if (this.clock.now - refusedAt > REFUSE_FLASH_MS) this.refuse(label, icon);
+        refusedAt = this.clock.now;
+        return;
+      }
+      pickup.active = false;
+      icon.destroy();
+      label.destroy();
+      this.pedestals = this.pedestals.filter((p) => p !== entry);
+      onSold();
+      if (ware === 'item') room.itemTaken = true;
+      this.sell(ware, wallet, item);
+    });
+    const entry = { x, y, text, label, pickup };
+    this.pedestals.push(entry);
+    this.roomDecor.push(pickup);
+  }
+
+  private wareIcon(ware: Ware, item: Item | undefined, x: number, y: number): Phaser.GameObjects.Image {
+    if (ware === 'item' && item) return addItemIcon(this, x, y, item);
+    if (ware === 'heal') return this.add.image(x, y, 'drop-heal').setScale(1.8);
+    if (this.textures.exists(KEY_ICON_ART)) return this.add.image(x, y, KEY_ICON_ART);
+    return this.add.image(x, y, 'key').setAngle(-45).setScale(0.75);
+  }
+
+  /** The price turns red and the ware shakes: the player can't pay, or it would do nothing. */
+  private refuse(label: Phaser.GameObjects.Text, icon: Phaser.GameObjects.Image) {
+    label.setColor('#e8435a');
+    this.time.delayedCall(REFUSE_FLASH_MS, () => label.active && label.setColor(COLORS.text));
+    this.tweens.add({ targets: icon, x: icon.x + 3, duration: 40, yoyo: true, repeat: 2 });
+  }
+
+  private wallet(): Wallet {
+    const { player } = this;
+    return {
+      currency: this.currency,
+      health: player.health,
+      maxHealth: player.stats.maxHealth,
+      drive: this.drive,
+      driveMax: this.driveMax,
+    };
+  }
+
+  private sell(ware: Ware, wallet: Wallet, item: Item | undefined) {
+    const after = buy(ware, wallet);
+    this.currency = after.currency;
+    this.player.health = after.health;
+    this.drive = after.drive;
+    this.driveMax = after.driveMax;
+    if (ware === 'item' && item) {
+      this.grantItem(item);
+      return;
+    }
+    this.showBanner(...wareText(ware, item));
   }
 
   private grantItem(item: Item) {
@@ -1353,6 +1470,13 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
 function pedestalText(item: Item): string[] {
   return [t(item.name), t(item.hint)];
+}
+
+/** Name and what it does: an item keeps its hint, the shop's own wares say it plainly. */
+function wareText(ware: Ware, item: Item | undefined): [string, string] {
+  if (ware === 'heal') return [t('shop.heal.name'), t('shop.heal.hint', { pct: Math.round(SHOP.healShare * 100) })];
+  if (ware === 'drive') return [t('shop.drive.name'), t('shop.drive.hint')];
+  return item ? [t(item.name), t(item.hint)] : ['', ''];
 }
 
 /** A cursed room reads as cursed, from its doors and its floor, until it is cleared. */

@@ -39,6 +39,7 @@ export const COLORS = {
   hpFrame: 0xf2c14e,
   boss: 0xe8435a,
   treasure: 0xffd23f,
+  shop: 0x4fd1a5,
   doorMarker: 0x6d64a0,
   curse: 0x9b4dff,
   text: '#e9e4ff',

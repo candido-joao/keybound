@@ -13,7 +13,17 @@ import { baseId } from '../combat/stats';
 import { RUN_FLOORS } from '../floor/phases';
 import { ROOM_EVENTS } from '../floor/roomEvents';
 import { SWING } from '../combat/swing';
-import { attackLine, enemyLines, eventEntries, itemEntries, itemPools, phaseEntries, swingEntry } from './catalog';
+import { SHOP } from '../combat/shop';
+import {
+  attackLine,
+  enemyLines,
+  eventEntries,
+  itemEntries,
+  itemPools,
+  phaseEntries,
+  shopLines,
+  swingEntry,
+} from './catalog';
 
 describe('phaseEntries', () => {
   it('covers every floor of the run once, in order', () => {
@@ -102,5 +112,12 @@ describe('swingEntry', () => {
     expect(entry.reach).toBe(SWING.reach);
     expect(entry.arcDegrees).toBe(150);
     expect(entry.damagePct).toBe(50);
+  });
+});
+
+describe('shopLines', () => {
+  it('quotes the prices the game charges', () => {
+    const prices = shopLines().flatMap((l) => (l.params?.price === undefined ? [] : [l.params.price]));
+    expect(prices).toEqual([SHOP.prices.item, SHOP.prices.heal, SHOP.prices.drive]);
   });
 });

@@ -2,6 +2,7 @@ import { POOL_DEPTH } from '../combat/balance';
 import { ENEMIES, type EnemyAttack, type EnemyDef } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { type Item, type ItemPool, baseId } from '../combat/stats';
+import { SHOP } from '../combat/shop';
 import { DRIVE, SWING } from '../combat/swing';
 import { LOCK_FROM_DEPTH } from '../floor/locks';
 import { PHASES, type PhaseDef } from '../floor/phases';
@@ -242,4 +243,15 @@ export function swingEntry(): SwingEntry {
       { key: 'wiki.swing.locked', params: { n: LOCK_FROM_DEPTH } },
     ],
   };
+}
+
+/** The shop's wares and prices, as the game sets them. */
+export function shopLines(): Line[] {
+  const { prices, healShare } = SHOP;
+  return [
+    { key: 'wiki.shop.where', params: { n: LOCK_FROM_DEPTH } },
+    { key: 'wiki.shop.item', params: { price: prices.item } },
+    { key: 'wiki.shop.heal', params: { price: prices.heal, pct: pct(healShare) } },
+    { key: 'wiki.shop.drive', params: { price: prices.drive, max: DRIVE.maxCap } },
+  ];
 }

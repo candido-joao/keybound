@@ -33,6 +33,7 @@ const MAP_MARKER: Record<RoomType, number | undefined> = {
   normal: undefined,
   treasure: COLORS.treasure,
   boss: COLORS.boss,
+  shop: COLORS.shop,
 };
 
 // Collected items sit under the minimap, centered in the margin right of the room.
