@@ -172,7 +172,11 @@ export class TitleScene extends Phaser.Scene {
 
   private startRun() {
     // Phones hide the browser bars only in fullscreen, and only from a tap or key press like this one.
-    if (usingTouch() && !this.scale.isFullscreen) this.scale.startFullscreen();
+    if (usingTouch() && !this.scale.isFullscreen) {
+      // Keep the seed field and rotation overlay in fullscreen alongside the canvas.
+      this.scale.fullscreenTarget = document.documentElement;
+      this.scale.startFullscreen();
+    }
     this.scene.start('game', newRun(this.seedInput || undefined));
   }
 }

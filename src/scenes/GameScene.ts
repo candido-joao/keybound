@@ -1208,6 +1208,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.endTitle = title;
     this.gameOver = true;
     this.physics.pause();
+    pad.releaseAll();
     this.scene.launch('summary');
     this.scene.bringToTop('summary');
   }
