@@ -266,7 +266,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.floor = generateFloor(new Rng(`${this.seed}:floor:${this.depth}`), this.depth);
     const events = rollRoomEvents(new Rng(`${this.seed}:events:${this.depth}`), this.floor.rooms.values());
     for (const [room, id] of events) room.event = id;
-    for (const room of this.floor.rooms.values()) room.locked = startsLocked(room, this.depth);
+    const lockRng = new Rng(`${this.seed}:locks:${this.depth}`);
+    for (const room of this.floor.rooms.values()) room.locked = startsLocked(lockRng, room);
     this.eventDirector = new RoomEventDirector(this, this);
 
     const rewardRooms = [...this.floor.rooms.values()].filter((r) => r.type === 'treasure' || r.type === 'boss');
@@ -560,14 +561,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const suffix = wave > 0 ? `:w${wave}` : '';
     const rng = new Rng(`${this.seed}:room:${this.depth}:${room.x},${room.y}${suffix}`);
     const { min, max } = enemiesPerRoom(this.depth);
-    const kinds = rollRoomEnemies(rng, this.depth, rng.int(min, max), this.phase.enemies);
+    const kinds = rollRoomEnemies(rng, rng.int(min, max), this.phase.enemies);
     const defs = kinds.map((def) => enemyForDepth(def, this.depth));
     this.spawnPack(transform ? defs.map(transform) : curseStrays(rng, defs, this.depth), rng);
   }
 
   spawnMiniBoss(room: RoomNode) {
     const rng = new Rng(`${this.seed}:miniboss:${this.depth}:${room.x},${room.y}`);
-    const [kind] = rollRoomEnemies(rng, this.depth, 1, this.phase.enemies);
+    const [kind] = rollRoomEnemies(rng, 1, this.phase.enemies);
     const def = miniBossDef(enemyForDepth(kind, this.depth));
     this.spawnPack([def], rng);
     this.showBanner(t(def.name));

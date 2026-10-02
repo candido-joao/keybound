@@ -280,11 +280,11 @@ export const es = {
   'wiki.swing.doors':
     'Golpear una puerta cerrada la abre, incluso en plena pelea. Volver a una sala sin limpiar la cierra otra vez.',
   'wiki.swing.locked':
-    'Desde el piso {n}, la sala del tesoro y la tienda están cerradas: solo el golpe abre la puerta.',
+    'La sala del tesoro y la tienda tienen un {pct}% de probabilidad de estar cerradas: solo el golpe abre la puerta.',
   'wiki.swing.demo': 'Demostración del golpe: la llave barre el abanico frente al héroe y empuja a una Sombra.',
   'wiki.shop.name': 'Tienda',
   'wiki.shop.where':
-    'Un callejón por piso, si sobra uno; su puerta está cerrada desde el piso {n}. Toca el pedestal para comprar.',
+    'Un callejón por piso, si sobra uno; su puerta tiene un {pct}% de probabilidad de estar cerrada. Toca el pedestal para comprar.',
   'wiki.shop.item': 'Un objeto del sorteo del tesoro: {price} monedas',
   'wiki.shop.heal': 'Gran curación, {pct}% de la vida máxima: {price} monedas',
   'wiki.shop.drive': '+1 carga máxima de drive, ya cargada, hasta {max}: {price} monedas',

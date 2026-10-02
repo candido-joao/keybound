@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { POOL_DEPTH } from '../combat/balance';
-import {
-  CRYSTAL_SENTINEL,
-  CRYSTAL_SHARD,
-  CRYSTAL_SPIKE,
-  ENEMIES,
-  SHADOW_COLOSSUS,
-  type VolleyAttack,
-} from '../combat/enemies';
+import { CRYSTAL_SENTINEL, CRYSTAL_SHARD, ENEMIES, SHADOW_COLOSSUS, type VolleyAttack } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { baseId } from '../combat/stats';
 import { RUN_FLOORS } from '../floor/phases';
@@ -38,10 +31,10 @@ describe('phaseEntries', () => {
     for (const def of ENEMIES) expect(listed, def.id).toContain(def.id);
   });
 
-  it('starts an enemy no earlier than its phase or its own first floor', () => {
-    const garden = phaseEntries().find((p) => p.def.id === 'garden')!;
-    expect(garden.enemies.find((e) => e.def === CRYSTAL_SENTINEL)!.fromFloor).toBe(garden.firstFloor);
-    expect(garden.enemies.find((e) => e.def === CRYSTAL_SPIKE)!.fromFloor).toBe(5);
+  it('starts every enemy from the first floor of its phase', () => {
+    for (const phase of phaseEntries()) {
+      for (const e of phase.enemies) expect(e.fromFloor, e.def.id).toBe(phase.firstFloor);
+    }
   });
 
   it('puts split pieces right after their parent, telling where they come from', () => {

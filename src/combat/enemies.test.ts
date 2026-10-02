@@ -37,23 +37,19 @@ describe('crossesFury', () => {
 });
 
 describe('rollRoomEnemies', () => {
-  it('keeps floor 1 to plain shadows', () => {
-    expect(new Set(rollRoomEnemies(new Rng('f1'), 1, 200, CRYPT_ENEMIES))).toEqual(new Set([SHADOW]));
-  });
-
-  it('mixes in casters from floor 2', () => {
-    const kinds = rollRoomEnemies(new Rng('f2'), 2, 200, CRYPT_ENEMIES);
+  it('mixes in casters, shadows still the most common', () => {
+    const kinds = rollRoomEnemies(new Rng('f1'), 200, CRYPT_ENEMIES);
     expect(kinds).toContain(SHADOW_CASTER);
     expect(kinds.filter((d) => d === SHADOW).length).toBeGreaterThan(kinds.filter((d) => d === SHADOW_CASTER).length);
   });
 
   it('is the same for the same seed', () => {
-    const ids = () => rollRoomEnemies(new Rng('same'), 3, 6, CRYPT_ENEMIES).map((d) => d.id);
+    const ids = () => rollRoomEnemies(new Rng('same'), 6, CRYPT_ENEMIES).map((d) => d.id);
     expect(ids()).toEqual(ids());
   });
 
-  it('returns nothing when no enemy is allowed yet', () => {
-    expect(rollRoomEnemies(new Rng('x'), 1, 3, [{ def: SHADOW, weight: 1, minDepth: 5 }])).toEqual([]);
+  it('returns nothing from an empty table', () => {
+    expect(rollRoomEnemies(new Rng('x'), 3, [])).toEqual([]);
   });
 });
 
@@ -105,9 +101,9 @@ describe('ENEMIES', () => {
 });
 
 describe('CRYPT_ENEMIES', () => {
-  it('brings in bones from floor 2 and lanterns from floor 3', () => {
-    expect(rollRoomEnemies(new Rng('f2'), 2, 300, CRYPT_ENEMIES)).toContain(BONES);
-    expect(rollRoomEnemies(new Rng('f2'), 2, 300, CRYPT_ENEMIES)).not.toContain(LANTERN);
-    expect(rollRoomEnemies(new Rng('f3'), 3, 300, CRYPT_ENEMIES)).toContain(LANTERN);
+  it('can roll every crypt enemy', () => {
+    expect(new Set(rollRoomEnemies(new Rng('f1'), 300, CRYPT_ENEMIES))).toEqual(
+      new Set([SHADOW, SHADOW_CASTER, BONES, LANTERN]),
+    );
   });
 });

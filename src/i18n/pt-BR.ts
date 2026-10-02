@@ -276,11 +276,11 @@ export const ptBR = {
     'Cada sala limpa devolve 1 carga. O máximo começa em {start} e chega a {max} com melhorias; sem carga, o golpe não sai.',
   'wiki.swing.doors':
     'Acertar uma porta fechada a abre, mesmo no meio da luta. Voltar a uma sala que não foi limpa tranca tudo de novo.',
-  'wiki.swing.locked': 'A partir do andar {n}, a sala do tesouro e a loja ficam trancadas: só o golpe abre a porta.',
+  'wiki.swing.locked': 'A sala do tesouro e a loja têm {pct}% de chance de estar trancadas: só o golpe abre a porta.',
   'wiki.swing.demo': 'Demonstração do golpe: a chave varre o leque à frente do herói e empurra uma Sombra.',
   'wiki.shop.name': 'Loja',
   'wiki.shop.where':
-    'Um beco por andar, quando sobra um; a porta fica trancada a partir do andar {n}. Encoste no pedestal para comprar.',
+    'Um beco por andar, quando sobra um; a porta tem {pct}% de chance de estar trancada. Encoste no pedestal para comprar.',
   'wiki.shop.item': 'Um item do sorteio do tesouro: {price} moedas',
   'wiki.shop.heal': 'Cura grande, {pct}% da vida máxima: {price} moedas',
   'wiki.shop.drive': '+1 carga máxima de drive, já carregada, até {max}: {price} moedas',

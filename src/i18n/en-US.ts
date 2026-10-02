@@ -274,11 +274,12 @@ export const enUS = {
     'Each cleared room gives back 1 charge. The max starts at {start} and reaches {max} with upgrades; with no charge, nothing happens.',
   'wiki.swing.doors':
     'Hitting a closed door opens it, even mid fight. Walking back into a room you didn’t clear locks it all again.',
-  'wiki.swing.locked': 'From floor {n} on, the treasure room and the shop are locked: only a swing opens their doors.',
+  'wiki.swing.locked':
+    'The treasure room and the shop each have a {pct}% chance to be locked: only a swing opens their doors.',
   'wiki.swing.demo': 'Swing demo: the key sweeps the fan in front of the hero and shoves a Shadow.',
   'wiki.shop.name': 'Shop',
   'wiki.shop.where':
-    'One dead end per floor, when there is one to spare; its door is locked from floor {n} on. Walk into a pedestal to buy.',
+    'One dead end per floor, when there is one to spare; its door has a {pct}% chance to be locked. Walk into a pedestal to buy.',
   'wiki.shop.item': 'One item from the treasure roll: {price} coins',
   'wiki.shop.heal': 'Big heal, {pct}% of max HP: {price} coins',
   'wiki.shop.drive': '+1 max drive charge, already charged, up to {max}: {price} coins',
