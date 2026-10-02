@@ -1063,10 +1063,13 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   private stockShops() {
     this.shopSold = new Map();
     const rng = new Rng(`${this.seed}:shop:${this.depth}`);
+    const reserved = [...this.items, ...this.roomItems.values()];
     for (const room of this.floor.rooms.values()) {
       if (room.type !== 'shop') continue;
-      const [item] = rollRewards(rng, ITEMS, this.items, 1, this.depth);
-      if (item) this.roomItems.set(room, item);
+      const [item] = rollRewards(rng, ITEMS, reserved, 1, this.depth);
+      if (!item) continue;
+      this.roomItems.set(room, item);
+      reserved.push(item);
     }
   }
 
