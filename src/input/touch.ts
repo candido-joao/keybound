@@ -22,15 +22,18 @@ export const pad = new VirtualPad(PAD_LAYOUT, loadSettings().stickMode);
 /** Touch controls show on touch screens, and from the first touch on any other. */
 let touching = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
+/** Reports the current input mode used to show touch controls and choose key-free hints. */
 export function usingTouch(): boolean {
   return touching;
 }
 
+/** Switches input mode, clearing held touches when keyboard input takes over. */
 export function setUsingTouch(on: boolean) {
   touching = on;
   if (!on) pad.releaseAll();
 }
 
+/** Clears active touches before changing stick placement and persists the choice for future sessions. */
 export function setStickMode(mode: StickMode) {
   pad.releaseAll();
   pad.mode = mode;

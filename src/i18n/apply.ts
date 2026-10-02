@@ -13,6 +13,7 @@ export function chooseLocale(locale: Locale) {
   saveSettings({ ...loadSettings(), locale });
 }
 
+/** Keeps game translations, the page language, and the optional rotation prompt in sync. */
 function showLocale(locale: Locale) {
   setLocale(locale);
   document.documentElement.lang = locale;

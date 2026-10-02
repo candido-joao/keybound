@@ -332,6 +332,7 @@ export function addKeyImage(scene: Phaser.Scene, x: number, y: number): Phaser.G
   return scene.add.image(x, y, 'key').setOrigin(KEY_FALLBACK_PIVOT, 0.5);
 }
 
+/** Caps combined keyboard and stick input at full strength while preserving partial movement. */
 function clampAxis(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }

@@ -26,6 +26,7 @@ export interface PadLayout {
 
 const FREE = -1;
 
+/** Returns the other stick placement mode for the pause menu's two-option cycle. */
 export function nextStickMode(mode: StickMode): StickMode {
   return mode === 'fixed' ? 'floating' : 'fixed';
 }
@@ -170,6 +171,7 @@ export class VirtualPad {
   }
 }
 
+/** Bounds a floating base coordinate to the inclusive limits that keep its ring on screen. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

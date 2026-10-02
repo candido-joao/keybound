@@ -33,6 +33,7 @@ export function saveSettings(settings: Settings) {
   }
 }
 
+/** Reads versioned settings, defaulting invalid or missing fields so older saves remain usable. */
 export function parseSettings(data: unknown): Settings {
   if (typeof data !== 'object' || data === null) return { ...DEFAULTS };
   const record = data as Record<string, unknown>;
