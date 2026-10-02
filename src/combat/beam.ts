@@ -12,8 +12,11 @@ export const BEAM = {
   continuousChargeMs: 500,
   durationMs: 400,
   tickMs: 100,
-  /** A full release deals this many shots' worth of damage, spread over its ticks. */
-  shotsPerBeam: 2.4,
+  /**
+   * A full release deals this many shots' worth of damage, spread over its ticks. The charge and
+   * the beam take about 2.4 shots' worth of time; the rest pays for not firing while charging.
+   */
+  shotsPerBeam: 4,
   /** A continuous beam's damage per second against the bolts it replaces. */
   continuousShare: 0.6,
   /** Reach as a share of the bolts' range: hits hard, so it has to be used up close. */
