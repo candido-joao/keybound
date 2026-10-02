@@ -52,9 +52,11 @@ export class TouchScene extends Phaser.Scene {
     this.draw();
   }
 
-  /** Not while an overlay (pause, summary) sits over the run. */
+  /** Only during play, outside transitions, boss intros and overlays. */
   private get playable(): boolean {
-    return this.scene.isActive('game') && !this.scene.isActive('summary');
+    return (
+      this.scene.isActive('game') && !this.scene.isActive('summary') && (this.scene.get('game') as GameScene).canPause
+    );
   }
 
   private onDown(p: Phaser.Input.Pointer) {

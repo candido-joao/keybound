@@ -371,6 +371,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // A charge doesn't carry through a door, nor a swing pressed mid transition.
     this.endCharge();
     this.swingQueued = false;
+    pad.consume('swing');
     this.updateKeyWeapon();
   }
 
