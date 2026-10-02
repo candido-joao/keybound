@@ -56,6 +56,7 @@ import {
   EVENT_TUNING,
   type RoomEventId,
   curseStrays,
+  cursedDef,
   eventRoomType,
   miniBossDef,
   payAltar,
@@ -738,7 +739,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       return;
     }
     this.reward(def, x, y);
-    if (def.split) this.splitInto(def.split.id, def.split.count, x, y);
+    if (def.split) this.splitInto(def, x, y);
   }
 
   /** Kill count, drops and what a boss's fall sets off. */
@@ -818,12 +819,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.reward(def, image.x, image.y);
   }
 
-  /** `count` plain `id` enemies bursting out around where the last one fell. */
-  private splitInto(id: string, count: number, x: number, y: number) {
+  /** The parent's pieces bursting out around where it fell; a cursed parent's pieces keep the curse. */
+  private splitInto(parent: EnemyDef, x: number, y: number) {
+    const { id, count } = parent.split!;
     const base = ENEMIES.find((e) => e.id === id);
     if (!base) return;
     const rng = new Rng(`${this.seed}:split:${this.depth}:${this.splits++}`);
-    const def = enemyForDepth(base, this.depth);
+    const plain = enemyForDepth(base, this.depth);
+    const def = parent.cursed ? cursedDef(plain) : plain;
     const margin = TILE * 1.5;
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + rng.next();
