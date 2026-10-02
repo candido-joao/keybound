@@ -8,7 +8,7 @@ const LAYOUT: PadLayout = {
   deadzone: 0.2,
   moveHome: { x: 70, y: 450 },
   aimHome: { x: 890, y: 450 },
-  buttons: { pause: { x: 900, y: 130, r: 24 }, map: { x: 890, y: 44, r: 40 } },
+  buttons: { pause: { x: 900, y: 130, r: 24 }, map: { x: 890, y: 44, r: 40 }, swing: { x: 890, y: 340, r: 30 } },
 };
 
 describe('VirtualPad', () => {
@@ -108,6 +108,23 @@ describe('VirtualPad', () => {
     pad.releaseAll();
     expect(pad.moveX).toBe(0);
     expect(pad.isHeld('pause')).toBe(false);
+  });
+});
+
+describe('VirtualPad.consume', () => {
+  it('reports each press once, even after a quick release', () => {
+    const pad = new VirtualPad(LAYOUT, 'fixed');
+    expect(pad.press(1, 890, 340)).toBe('swing');
+    pad.release(1);
+    expect(pad.consume('swing')).toBe(true);
+    expect(pad.consume('swing')).toBe(false);
+  });
+
+  it('forgets presses on releaseAll', () => {
+    const pad = new VirtualPad(LAYOUT, 'fixed');
+    pad.press(1, 890, 340);
+    pad.releaseAll();
+    expect(pad.consume('swing')).toBe(false);
   });
 });
 

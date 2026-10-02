@@ -1,4 +1,5 @@
 import type { PlayerStats } from '../combat/stats';
+import { DRIVE } from '../combat/swing';
 import { MAX_DEPTH } from '../core/run';
 
 export type StatName = keyof PlayerStats;
@@ -39,6 +40,10 @@ export interface DebugTarget {
   placeItem(itemId: string): void;
   setHealth(hp: number): void;
   setGod(on: boolean): void;
+  drive(): number;
+  driveMax(): number;
+  /** Sets the key swing charges, raising the max to fit them. */
+  setDrive(charges: number): void;
   setStat(name: StatName, value: number): void;
   spawn(enemyId: string, count: number): void;
   spawnBoss(): void;
@@ -137,6 +142,16 @@ export const COMMANDS: readonly Command[] = [
     run: (t) => {
       t.setHealth(t.maxHealth());
       return [hpLine(t)];
+    },
+  },
+  {
+    name: 'drive',
+    args: [{ name: 'n', kind: 'int', min: 0, max: DRIVE.maxCap }],
+    summary: 'set key swing charges',
+    cheat: true,
+    run: (t, [n]) => {
+      t.setDrive(Number(n));
+      return [`drive ${t.drive()}/${t.driveMax()}`];
     },
   },
   {

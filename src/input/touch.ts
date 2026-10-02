@@ -13,6 +13,8 @@ export const PAD_LAYOUT: PadLayout = {
   buttons: {
     pause: { x: GAME_W - 40, y: 128, r: 26 },
     map: { x: GAME_W - 70, y: 44, r: 44 },
+    // Over the aim stick, for the thumb that aims.
+    swing: { x: GAME_W - 62, y: GAME_H - 190, r: 30 },
   },
 };
 

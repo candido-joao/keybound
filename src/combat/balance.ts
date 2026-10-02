@@ -77,7 +77,8 @@ export const DROP_ODDS = {
   healPerMiss: 0.03,
 } as const;
 
-export const HEAL_ORB_HP = 5;
+/** Share of max HP a heal orb restores, rounded up, so it keeps pace with HP items: 9 of the base 60. */
+export const HEAL_ORB_SHARE = 0.15;
 
 /** Inclusive range of enemies in a normal room. */
 export function enemiesPerRoom(depth: number): { min: number; max: number } {
