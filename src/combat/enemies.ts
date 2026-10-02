@@ -521,3 +521,7 @@ export function walkFrames(frames: number): number[] {
 }
 
 export const walkAnimKey = (texture: string) => `walk:${texture}`;
+
+/** What a revived enemy leaves on the floor; its strip loops like a walk. */
+export const BONE_PILE = 'bone-pile';
+export const BONE_PILE_FRAMES = 3;
