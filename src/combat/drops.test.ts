@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../core/rng';
-import { DROP_ODDS, HEAL_ORB_HP } from './balance';
-import { FRESH_LUCK, applyDrop, canCollect, healChance, rollDrops, withBossHeal } from './drops';
+import { DROP_ODDS } from './balance';
+import { FRESH_LUCK, applyDrop, canCollect, healChance, healOrbHp, rollDrops, withBossHeal } from './drops';
 
 describe('healChance', () => {
   it('starts at the base odds', () => {
@@ -53,7 +53,13 @@ describe('applyDrop', () => {
   });
 
   it('heals by the orb amount', () => {
-    expect(applyDrop(state, 'heal').health).toBe(30 + HEAL_ORB_HP);
+    expect(applyDrop(state, 'heal').health).toBe(30 + healOrbHp(60));
+  });
+
+  it('heals a share of max HP, rounded up', () => {
+    expect(healOrbHp(60)).toBe(9);
+    expect(healOrbHp(160)).toBe(24);
+    expect(healOrbHp(45)).toBe(7);
   });
 
   it('never heals past max HP', () => {

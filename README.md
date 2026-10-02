@@ -10,6 +10,7 @@ Feito com [Phaser 4](https://phaser.io), TypeScript e Vite.
 | --------------- | ------------------------------------------------- |
 | `W` `A` `S` `D` | Mover                                             |
 | `↑` `↓` `←` `→` | Atirar                                            |
+| `Espaço`        | Balançar a chave (gasta uma carga de drive)       |
 | `Tab` (segurar) | Mapa expandido                                    |
 | `Esc`           | Pausar                                            |
 | `R`             | Nova run (no pause) ou repetir a seed (no resumo) |

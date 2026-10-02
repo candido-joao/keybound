@@ -73,8 +73,28 @@ const SLOT_GAP = 6;
 const SLOT_X = GAUGE_X + GAUGE_OUTLINE.radius + HP_THICKNESS / 2 + SLOT_GAP + WEAPON_SLOT.size / 2;
 const SLOT_Y = GAUGE_Y;
 
+// Drive gauge, Kingdom Hearts style: one slanted bar in the strip between the key slot and the
+// HP bar, starting off the portrait's ring, with the charge count large beside it. Spending or
+// gaining a charge changes the count and the bar's color, not its size.
+const DRIVE_H = 8;
+// Off the keyhole's stem, its bottom level with the portrait's base, above where the HP bar runs.
+const DRIVE_X = GAUGE_X + PORTRAIT_KEYHOLE.stemHalfWidth + 10;
+const DRIVE_Y = GAUGE_Y + PORTRAIT_KEYHOLE.stemBottom - DRIVE_H;
+// Ends under the key slot's right edge, so the bar and the slot line up.
+const DRIVE_W = SLOT_X + WEAPON_SLOT.size / 2 - DRIVE_X;
+/** How far the bar leans, as in the KH gauge. */
+const DRIVE_SLANT = 4;
+/** Bar color: no charge, some charge, every charge the player can hold. */
+const DRIVE_EMPTY = 0x2a1f12;
+const DRIVE_CHARGED = 0xff9a3c;
+const DRIVE_FULL = 0xffd23f;
+
 /** Runs on top of GameScene and reads its state every frame. */
 export class HudScene extends Phaser.Scene {
+  private driveGauge!: Phaser.GameObjects.Graphics;
+  private driveCount!: Phaser.GameObjects.Text;
+  private drawnDrive = -1;
+  private drawnDriveMax = -1;
   private map!: Phaser.GameObjects.Graphics;
   private gauge!: Phaser.Textures.CanvasTexture;
   private trail = new HealthTrail();
@@ -113,6 +133,7 @@ export class HudScene extends Phaser.Scene {
     this.labelDepth = 0;
     this.labelLocale = null;
     this.createCurrency();
+    this.createDriveGauge();
     this.createBossBar();
     this.floorLabel = this.add
       .text(GAME_W / 2, BIG.y - 16, '', {
@@ -140,6 +161,7 @@ export class HudScene extends Phaser.Scene {
     this.updateFloorLabel(game.depth);
     this.drawItemIcons(game.items);
     this.drawCurrency(game.currency);
+    this.drawDrive(game.drive, game.driveMax);
     this.drawBossBar(game.bossHealth, delta);
   }
 
@@ -199,6 +221,49 @@ export class HudScene extends Phaser.Scene {
     this.bossNameKey = name;
     this.bossNameLocale = locale;
     this.bossName.setText(name ? t(name) : '');
+  }
+
+  private createDriveGauge() {
+    this.driveGauge = this.add.graphics();
+    this.driveCount = this.add
+      .text(DRIVE_X + DRIVE_W + DRIVE_SLANT, DRIVE_Y + DRIVE_H / 2, '', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        fontStyle: 'bold italic',
+        color: cssColor(DRIVE_CHARGED),
+        stroke: '#000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0.5);
+    this.drawnDrive = -1;
+    this.drawnDriveMax = -1;
+  }
+
+  /** Redrawn only when a charge is spent or gained, or the max changes; a regained charge pops the count. */
+  private drawDrive(drive: number, max: number) {
+    if (drive === this.drawnDrive && max === this.drawnDriveMax) return;
+    const gained = this.drawnDrive >= 0 && drive > this.drawnDrive;
+    this.drawnDrive = drive;
+    this.drawnDriveMax = max;
+
+    const color = drive <= 0 ? DRIVE_EMPTY : drive >= max ? DRIVE_FULL : DRIVE_CHARGED;
+    const g = this.driveGauge.clear();
+    g.fillStyle(0x000000).fillPoints(
+      slantedBar(DRIVE_X - 1.5, DRIVE_Y - 1.5, DRIVE_W + 3, DRIVE_H + 3, DRIVE_SLANT),
+      true,
+    );
+    g.fillStyle(color).fillPoints(slantedBar(DRIVE_X, DRIVE_Y, DRIVE_W, DRIVE_H, DRIVE_SLANT), true);
+    // A lighter top edge, so a charged bar reads as lit.
+    if (drive > 0) g.fillStyle(COLORS.hpTrail).fillRect(DRIVE_X + DRIVE_SLANT, DRIVE_Y, DRIVE_W - DRIVE_SLANT, 2);
+
+    this.driveCount
+      .setText(`${drive}`)
+      .setColor(cssColor(drive > 0 ? color : DRIVE_CHARGED))
+      .setAlpha(drive > 0 ? 1 : 0.5);
+    if (!gained) return;
+    this.tweens.killTweensOf(this.driveCount);
+    this.driveCount.setScale(1.5);
+    this.tweens.add({ targets: this.driveCount, scale: 1, duration: 220, ease: 'Back.Out' });
   }
 
   private createCurrency() {
@@ -356,4 +421,14 @@ export class HudScene extends Phaser.Scene {
       }
     });
   }
+}
+
+/** Parallelogram leaning right: the bottom edge sits `slant` px left of the top one. */
+function slantedBar(x: number, y: number, w: number, h: number, slant: number): Phaser.Math.Vector2[] {
+  return [
+    new Phaser.Math.Vector2(x + slant, y),
+    new Phaser.Math.Vector2(x + w, y),
+    new Phaser.Math.Vector2(x + w - slant, y + h),
+    new Phaser.Math.Vector2(x, y + h),
+  ];
 }

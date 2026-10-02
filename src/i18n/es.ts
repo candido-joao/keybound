@@ -67,12 +67,13 @@ export const es = {
   'title.seed-random': 'aleatoria',
   'title.seed-hint': 'Escribe para fijar una semilla   ·   Retroceso borra',
   'title.start': 'Enter para empezar',
-  'title.controls': 'WASD mover   ·   Flechas disparar   ·   Tab mapa   ·   Esc pausa',
+  'title.controls': 'WASD mover   ·   Flechas disparar   ·   Espacio golpe   ·   Tab mapa   ·   Esc pausa',
   'title.language': 'Tab idioma: {language}',
   'title.wiki': 'F1 wiki',
   'title.seed-hint-touch': 'Toca para escribir una semilla',
   'title.start-touch': 'Toca para empezar',
-  'title.controls-touch': 'Joystick izquierdo mueve   ·   derecho dispara   ·   mantén el mapa para ampliarlo',
+  'title.controls-touch':
+    'Joystick izquierdo mueve   ·   derecho dispara   ·   llave golpea   ·   mantén el mapa para ampliarlo',
   'title.language-touch': 'Idioma: {language}',
   'title.wiki-touch': 'Wiki',
 
@@ -211,6 +212,7 @@ export const es = {
   'wiki.nav.enemies': 'Enemigos',
   'wiki.nav.items': 'Objetos',
   'wiki.nav.events': 'Salas especiales',
+  'wiki.nav.key': 'Llave',
   'wiki.footer': 'Generada con los datos del propio juego: siempre coincide con la versión que juegas.',
   'wiki.floor-range': 'Pisos {first}–{last}',
   'wiki.phases.intro':
@@ -253,6 +255,26 @@ export const es = {
   'wiki.item.variants': 'Variantes',
   'wiki.events.intro':
     'Algunas salas sortean un evento: el {normal}% de las salas comunes y el {boss}% de las salas del jefe.',
+  'wiki.key.intro':
+    'Además de disparar, la llave golpea de cerca. Cada golpe gasta una carga de drive, que se ve en la barra naranja junto al arma.',
+  'wiki.swing.name': 'Golpe de llave',
+  'wiki.swing.controls': 'Espacio, o el botón de la llave en táctil',
+  'wiki.swing.reach': 'Alcance',
+  'wiki.swing.reach-value': '{px} px',
+  'wiki.swing.arc': 'Apertura',
+  'wiki.swing.arc-value': '{deg}°',
+  'wiki.swing.damage': 'Daño',
+  'wiki.swing.damage-value': '{pct}% del disparo',
+  'wiki.swing.cost': 'Costo',
+  'wiki.swing.cost-value': '1 carga de drive',
+  'wiki.swing.sweep':
+    'Barre el frente hacia donde apuntas; sin disparar, hacia donde caminas. Empuja lo que golpea. Los jefes y los enemigos fijos no se mueven.',
+  'wiki.swing.drive':
+    'Cada sala limpia devuelve 1 carga. El máximo empieza en {start} y llega a {max} con mejoras; sin carga, el golpe no sale.',
+  'wiki.swing.doors':
+    'Golpear una puerta cerrada la abre, incluso en plena pelea. Volver a una sala sin limpiar la cierra otra vez.',
+  'wiki.swing.locked': 'Desde el piso {n}, la sala del tesoro está cerrada: solo el golpe abre la puerta.',
+  'wiki.swing.demo': 'Demostración del golpe: la llave barre el abanico frente al héroe y empuja a una Sombra.',
   'wiki.event.dark.name': 'Sala oscura',
   'wiki.event.dark.text':
     'Se apaga la luz y los enemigos llegan en {min} a {max} oleadas. Cada oleada superada hace llover monedas y orbes de curación.',

@@ -16,6 +16,8 @@ function fakeTarget() {
     health: 40,
     maxHealth: 60,
     god: false,
+    drive: 1,
+    driveMax: 1,
     seeded: false,
     items: [] as string[],
     stats: {} as Partial<Record<StatName, number>>,
@@ -43,6 +45,12 @@ function fakeTarget() {
     placeItem: (id) => state.pedestals.push(id),
     setHealth: (hp) => (state.health = Math.min(hp, state.maxHealth)),
     setGod: (on) => (state.god = on),
+    drive: () => state.drive,
+    driveMax: () => state.driveMax,
+    setDrive: (n) => {
+      state.drive = n;
+      state.driveMax = Math.max(state.driveMax, n);
+    },
     setStat: (name, value) => {
       state.stats[name] = value;
       if (name === 'maxHealth') state.maxHealth = value;
@@ -86,6 +94,12 @@ describe('execute', () => {
     const { state, target } = fakeTarget();
     execute('give vital-shard', target, CATALOG);
     expect(state.items).toEqual(['vital-shard']);
+  });
+
+  it('sets drive charges and raises the max to fit them', () => {
+    const { state, target } = fakeTarget();
+    expect(execute('drive 3', target, CATALOG).lines).toEqual(['drive 3/3']);
+    expect(state.driveMax).toBe(3);
   });
 
   it('marks the run seeded on any cheat', () => {

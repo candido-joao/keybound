@@ -17,6 +17,8 @@ export class TouchScene extends Phaser.Scene {
   /** Pad state only changes on pointer events; the drawing follows on the next update. */
   private dirty = true;
   private shown = false;
+  /** The swing button dims without charges; redrawn when that changes. */
+  private drawnCharged = false;
 
   constructor() {
     super('touch');
@@ -35,6 +37,11 @@ export class TouchScene extends Phaser.Scene {
 
   update() {
     const show = usingTouch() && this.playable;
+    const charged = (this.scene.get('game') as GameScene).drive > 0;
+    if (charged !== this.drawnCharged) {
+      this.drawnCharged = charged;
+      this.dirty = true;
+    }
     if (show !== this.shown) {
       this.shown = show;
       this.graphics.setVisible(show);
@@ -74,6 +81,22 @@ export class TouchScene extends Phaser.Scene {
     this.drawStick(pad.move);
     this.drawStick(pad.aim);
     this.drawPause();
+    this.drawSwing();
+  }
+
+  /** A small key across the button; faint while the drive is empty. */
+  private drawSwing() {
+    const g = this.graphics;
+    const { x, y, r } = PAD_LAYOUT.buttons.swing;
+    const alpha = this.drawnCharged ? RING_ALPHA * (pad.isHeld('swing') ? 2 : 1) : IDLE_ALPHA;
+    g.fillStyle(0x000000, alpha);
+    g.fillCircle(x, y, r);
+    g.lineStyle(2, COLORS.hpFrame, alpha * 2);
+    g.strokeCircle(x, y, r);
+    g.lineStyle(3, COLORS.hpFrame, alpha * 2);
+    g.strokeCircle(x - 9, y + 9, 5);
+    g.lineBetween(x - 5, y + 5, x + 11, y - 11);
+    g.lineBetween(x + 6, y - 6, x + 10, y - 2);
   }
 
   private drawStick(stick: Stick) {

@@ -12,7 +12,8 @@ import { ITEMS } from '../combat/items';
 import { baseId } from '../combat/stats';
 import { RUN_FLOORS } from '../floor/phases';
 import { ROOM_EVENTS } from '../floor/roomEvents';
-import { attackLine, enemyLines, eventEntries, itemEntries, itemPools, phaseEntries } from './catalog';
+import { SWING } from '../combat/swing';
+import { attackLine, enemyLines, eventEntries, itemEntries, itemPools, phaseEntries, swingEntry } from './catalog';
 
 describe('phaseEntries', () => {
   it('covers every floor of the run once, in order', () => {
@@ -92,5 +93,14 @@ describe('itemEntries', () => {
 describe('eventEntries', () => {
   it('has one entry per room event', () => {
     expect(eventEntries().map((e) => e.id)).toEqual(ROOM_EVENTS.map((e) => e.id));
+  });
+});
+
+describe('swingEntry', () => {
+  it('reads the swing straight from its tuning', () => {
+    const entry = swingEntry();
+    expect(entry.reach).toBe(SWING.reach);
+    expect(entry.arcDegrees).toBe(150);
+    expect(entry.damagePct).toBe(50);
   });
 });

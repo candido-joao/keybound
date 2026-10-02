@@ -67,12 +67,12 @@ export const enUS = {
   'title.seed-random': 'random',
   'title.seed-hint': 'Type to set a seed   ·   Backspace deletes',
   'title.start': 'Press Enter to start',
-  'title.controls': 'WASD move   ·   Arrows shoot   ·   Tab map   ·   Esc pause',
+  'title.controls': 'WASD move   ·   Arrows shoot   ·   Space swing   ·   Tab map   ·   Esc pause',
   'title.language': 'Tab language: {language}',
   'title.wiki': 'F1 wiki',
   'title.seed-hint-touch': 'Tap to type a seed',
   'title.start-touch': 'Tap to start',
-  'title.controls-touch': 'Left stick moves   ·   right stick shoots   ·   hold the map to expand it',
+  'title.controls-touch': 'Left stick moves   ·   right stick shoots   ·   key swings   ·   hold the map to expand it',
   'title.language-touch': 'Language: {language}',
   'title.wiki-touch': 'Wiki',
 
@@ -209,6 +209,7 @@ export const enUS = {
   'wiki.nav.enemies': 'Enemies',
   'wiki.nav.items': 'Items',
   'wiki.nav.events': 'Special rooms',
+  'wiki.nav.key': 'Key',
   'wiki.footer': "Built from the game's own data: always matches the version you play.",
   'wiki.floor-range': 'Floors {first}–{last}',
   'wiki.phases.intro':
@@ -249,6 +250,26 @@ export const enUS = {
   'wiki.item.odds': '{pct}% chance',
   'wiki.item.variants': 'Variants',
   'wiki.events.intro': 'Some rooms roll an event: {normal}% of normal rooms and {boss}% of boss rooms.',
+  'wiki.key.intro':
+    'Besides shooting, the key strikes up close. Each swing spends a drive charge, shown in the orange bar by the weapon.',
+  'wiki.swing.name': 'Key swing',
+  'wiki.swing.controls': 'Space, or the key button on touch',
+  'wiki.swing.reach': 'Reach',
+  'wiki.swing.reach-value': '{px} px',
+  'wiki.swing.arc': 'Width',
+  'wiki.swing.arc-value': '{deg}°',
+  'wiki.swing.damage': 'Damage',
+  'wiki.swing.damage-value': '{pct}% of a shot',
+  'wiki.swing.cost': 'Cost',
+  'wiki.swing.cost-value': '1 drive charge',
+  'wiki.swing.sweep':
+    'Sweeps the area in front, toward your aim; when not shooting, the way you walk. Shoves whatever it hits. Bosses and anchored enemies don’t get pushed.',
+  'wiki.swing.drive':
+    'Each cleared room gives back 1 charge. The max starts at {start} and reaches {max} with upgrades; with no charge, nothing happens.',
+  'wiki.swing.doors':
+    'Hitting a closed door opens it, even mid fight. Walking back into a room you didn’t clear locks it all again.',
+  'wiki.swing.locked': 'From floor {n} on, the treasure room is locked: only a swing opens its door.',
+  'wiki.swing.demo': 'Swing demo: the key sweeps the fan in front of the hero and shoves a Shadow.',
   'wiki.event.dark.name': 'Dark room',
   'wiki.event.dark.text':
     'The lights go out and enemies come in {min} to {max} waves. Each wave cleared rains coins and heal orbs.',

@@ -2,6 +2,8 @@ import { POOL_DEPTH } from '../combat/balance';
 import { ENEMIES, type EnemyAttack, type EnemyDef } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { type Item, type ItemPool, baseId } from '../combat/stats';
+import { DRIVE, SWING } from '../combat/swing';
+import { LOCK_FROM_DEPTH } from '../floor/locks';
 import { PHASES, type PhaseDef } from '../floor/phases';
 import { EVENT_CHANCE, EVENT_TUNING, ROOM_EVENTS, type RoomEventId } from '../floor/roomEvents';
 import type { MessageKey } from '../i18n';
@@ -215,4 +217,29 @@ export function pct(share: number): number {
 /** Convert milliseconds to seconds rounded to one decimal place. */
 export function seconds(ms: number): number {
   return Math.round(ms / 100) / 10;
+}
+
+export interface SwingEntry {
+  /** In game px. */
+  reach: number;
+  /** Width of the fan, in degrees. */
+  arcDegrees: number;
+  /** Share of a shot's damage, in %. */
+  damagePct: number;
+  lines: Line[];
+}
+
+/** The key swing as the game tunes it. */
+export function swingEntry(): SwingEntry {
+  return {
+    reach: SWING.reach,
+    arcDegrees: Math.round((SWING.arc * 180) / Math.PI),
+    damagePct: pct(SWING.damageShare),
+    lines: [
+      { key: 'wiki.swing.sweep' },
+      { key: 'wiki.swing.drive', params: { start: DRIVE.startMax, max: DRIVE.maxCap } },
+      { key: 'wiki.swing.doors' },
+      { key: 'wiki.swing.locked', params: { n: LOCK_FROM_DEPTH } },
+    ],
+  };
 }

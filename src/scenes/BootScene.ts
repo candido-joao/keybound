@@ -15,6 +15,8 @@ import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, keyholeOutline, traceKeyhole }
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
 import { PHASES, floorTexture, wallTexture } from '../floor/phases';
 import { HERO_PORTRAIT_ART, HERO_SHEET, KEY_ART, KEY_ICON_ART, KEY_TITLE_ART } from '../entities/Player';
+import { SWING_FX, SWING_FX_FRAME } from '../entities/keyArt';
+import { SWING } from '../combat/swing';
 import {
   HERO_FRAMES_PER_ROW,
   HERO_FRAME_H,
@@ -49,6 +51,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image(KEY_TITLE_ART, 'weapons/key-title.png');
     this.load.image(KEY_ICON_ART, 'weapons/key-icon.png');
     this.load.image(HERO_PORTRAIT_ART, 'hero/portrait.png');
+    this.load.spritesheet(SWING_FX, 'weapons/swing.png', {
+      frameWidth: SWING_FX_FRAME.width,
+      frameHeight: SWING_FX_FRAME.height,
+    });
     this.load.spritesheet(HERO_SHEET, 'hero/walk.png', { frameWidth: HERO_FRAME_W, frameHeight: HERO_FRAME_H });
     const frame = { frameWidth: ENEMY_FRAME, frameHeight: ENEMY_FRAME };
     for (const def of ENEMIES) if (def.frames) this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, frame);
@@ -58,11 +64,12 @@ export class BootScene extends Phaser.Scene {
   /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
   create() {
     // The hero and key art are smooth downscales, not native pixel art: nearest sampling would break them up.
-    for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET]) {
+    for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET, SWING_FX]) {
       if (this.textures.exists(key)) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
     }
     this.createHeroAnims();
     this.createEnemyAnims();
+    this.createSwingAnim();
 
     const g = this.make.graphics({}, false);
     const bake = (key: string, w: number, h: number, draw: () => void) => {
@@ -90,6 +97,19 @@ export class BootScene extends Phaser.Scene {
       g.fillStyle(COLORS.door).fillRect(4, 4, TILE - 8, TILE - 8);
       g.fillStyle(0x5c4719).fillRect(TILE / 2 - 2, 4, 4, TILE - 8);
       g.fillStyle(COLORS.shadowEye).fillCircle(TILE / 2, TILE / 2, 5);
+    });
+
+    // Iron bands and a keyhole: only a key swing opens it.
+    bake('door-locked', TILE, TILE, () => {
+      g.fillStyle(0x0c0a16).fillRect(0, 0, TILE, TILE);
+      g.fillStyle(COLORS.door).fillRect(4, 4, TILE - 8, TILE - 8);
+      g.fillStyle(0x6b6f80)
+        .fillRect(4, 11, TILE - 8, 5)
+        .fillRect(4, TILE - 16, TILE - 8, 5);
+      g.fillStyle(0xcfd6e6).fillCircle(TILE / 2, TILE / 2 - 2, 6);
+      g.fillStyle(0x0c0a16)
+        .fillCircle(TILE / 2, TILE / 2 - 3, 2.5)
+        .fillTriangle(TILE / 2 - 2.5, TILE / 2 - 2, TILE / 2 + 2.5, TILE / 2 - 2, TILE / 2, TILE / 2 + 4);
     });
 
     bake('player', 32, 36, () => {
@@ -254,6 +274,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   /** One walk loop per sheet row; each row's first frame is the idle pose, so the loop skips it. */
+  /** The whole sheet plays once over the length of a swing. */
+  private createSwingAnim() {
+    if (!this.textures.exists(SWING_FX)) return;
+    const frames = this.anims.generateFrameNumbers(SWING_FX);
+    this.anims.create({ key: SWING_FX, frames, frameRate: (frames.length * 1000) / SWING.durationMs });
+  }
+
   private createHeroAnims() {
     if (!this.textures.exists(HERO_SHEET)) return;
     const rows = this.textures.get(HERO_SHEET).frameTotal / HERO_FRAMES_PER_ROW;

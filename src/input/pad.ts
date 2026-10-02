@@ -4,7 +4,9 @@
  */
 
 export type StickMode = 'fixed' | 'floating';
-export type PadButton = 'pause' | 'map';
+export type PadButton = 'pause' | 'map' | 'swing';
+
+const BUTTONS: readonly PadButton[] = ['pause', 'map', 'swing'];
 
 export interface Circle {
   x: number;
@@ -73,7 +75,9 @@ export class VirtualPad {
   mode: StickMode;
   readonly move: Stick;
   readonly aim: Stick;
-  private readonly held: Record<PadButton, number> = { pause: FREE, map: FREE };
+  private readonly held: Record<PadButton, number> = { pause: FREE, map: FREE, swing: FREE };
+  /** Presses not yet taken by `consume`, so a quick tap between two frames still counts. */
+  private readonly tapped: Record<PadButton, boolean> = { pause: false, map: false, swing: false };
 
   constructor(layout: PadLayout, mode: StickMode) {
     this.layout = layout;
@@ -87,6 +91,7 @@ export class VirtualPad {
     const button = this.buttonAt(x, y);
     if (button) {
       this.held[button] = id;
+      this.tapped[button] = true;
       return button;
     }
     const stick = x < this.layout.width / 2 ? this.move : this.aim;
@@ -105,20 +110,28 @@ export class VirtualPad {
   release(id: number) {
     if (this.move.pointer === id) this.move.release();
     if (this.aim.pointer === id) this.aim.release();
-    if (this.held.pause === id) this.held.pause = FREE;
-    if (this.held.map === id) this.held.map = FREE;
+    for (const button of BUTTONS) if (this.held[button] === id) this.held[button] = FREE;
   }
 
   /** Drops every touch, as when the game pauses or the keyboard takes over. */
   releaseAll() {
     this.move.release();
     this.aim.release();
-    this.held.pause = FREE;
-    this.held.map = FREE;
+    for (const button of BUTTONS) {
+      this.held[button] = FREE;
+      this.tapped[button] = false;
+    }
   }
 
   isHeld(button: PadButton): boolean {
     return this.held[button] !== FREE;
+  }
+
+  /** True once per press of the button. */
+  consume(button: PadButton): boolean {
+    const tapped = this.tapped[button];
+    this.tapped[button] = false;
+    return tapped;
   }
 
   get moveX(): number {
@@ -141,10 +154,8 @@ export class VirtualPad {
   }
 
   private buttonAt(x: number, y: number): PadButton | undefined {
-    const { pause, map } = this.layout.buttons;
-    if (Math.hypot(x - pause.x, y - pause.y) <= pause.r) return 'pause';
-    if (Math.hypot(x - map.x, y - map.y) <= map.r) return 'map';
-    return undefined;
+    const { buttons } = this.layout;
+    return BUTTONS.find((b) => Math.hypot(x - buttons[b].x, y - buttons[b].y) <= buttons[b].r);
   }
 
   /** Floating sticks start under the thumb, kept whole on screen. */
