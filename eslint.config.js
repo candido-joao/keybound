@@ -20,6 +20,7 @@ const PURE_LOGIC = [
   'src/debug/history.ts',
   'src/floor/**',
   'src/i18n/**',
+  'src/input/pad.ts',
   'src/ui/healthTrail.ts',
   'src/wiki/catalog.ts',
 ];

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
-import { COLORS, GAME_H, GAME_W } from '../config';
+import { COLORS, GAME_H, GAME_W, ROOM_W, ROOM_X } from '../config';
 import { type MessageKey, t } from '../i18n';
 import type { GameScene } from './GameScene';
+import { hintKey } from './tap';
 
 export interface BossIntroData {
   name: MessageKey;
@@ -71,13 +72,20 @@ export class BossIntroScene extends Phaser.Scene {
     this.time.delayedCall(END_AT, () => this.finish());
 
     this.add
-      .text(GAME_W - 16, GAME_H - 12, t('boss-intro.skip'), {
+      .text(GAME_W - 16, GAME_H - 12, t(hintKey('boss-intro.skip')), {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: COLORS.textMuted,
       })
       .setOrigin(1, 1);
     this.input.keyboard!.once('keydown-ENTER', () => this.finish());
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onTouch(p));
+  }
+
+  /** A new touch on the room skips; a thumb only lifting off a stick at the sides doesn't. */
+  private onTouch(p: Phaser.Input.Pointer) {
+    if (p.x < ROOM_X || p.x > ROOM_X + ROOM_W) return;
+    this.finish();
   }
 
   /** Snaps the camera back, since a skip can land mid pan. */

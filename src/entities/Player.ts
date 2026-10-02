@@ -3,6 +3,7 @@ import { BEAM, beamChargeMs, chargeStage, isContinuousBeam, releasePower } from 
 import { directionOffset, fanAngle, shotsInDirection } from '../combat/volley';
 import { type PlayerStats, boltRangeOf } from '../combat/stats';
 import type { GameClock } from '../core/clock';
+import { pad } from '../input/touch';
 import type { BoltSpec } from './Bolt';
 import { HERO_FRAME_H, HERO_FRAME_W, heroIdleFrame, heroRow, heroWalkAnim } from './heroSheet';
 
@@ -117,9 +118,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   move() {
     const k = this.keys;
-    const ix = (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0);
-    const iy = (k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0);
-    const len = Math.hypot(ix, iy) || 1;
+    // Keys give full steps; the stick also gives partial ones, which walk slower.
+    const ix = clampAxis((k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0) + pad.moveX);
+    const iy = clampAxis((k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0) + pad.moveY);
+    const len = Math.max(1, Math.hypot(ix, iy));
     const body = this.body as Phaser.Physics.Arcade.Body;
 
     // Lerp toward target velocity: a little slide, like Isaac. Slide only loosens the stop.
@@ -134,11 +136,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(this.invulnerable ? (Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1) : 1);
   }
 
-  /** Arrow keys aim and fire. Returns what to spawn this frame. */
+  /** Arrow keys or the aim stick aim and fire. Returns what to spawn this frame. */
   tryShoot(time: number): ShotOutput {
     const k = this.keys;
-    const sx = (k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0);
-    const sy = (k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0);
+    const sx = Math.sign((k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0) + pad.aimX);
+    const sy = Math.sign((k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0) + pad.aimY);
     const firing = sx !== 0 || sy !== 0;
     this.aim = axisAim(sx, sy) ?? this.aim;
 
@@ -328,6 +330,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 export function addKeyImage(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Image {
   if (scene.textures.exists(KEY_ART)) return scene.add.image(x, y, KEY_ART).setOrigin(KEY_ART_PIVOT, 0.5);
   return scene.add.image(x, y, 'key').setOrigin(KEY_FALLBACK_PIVOT, 0.5);
+}
+
+function clampAxis(value: number): number {
+  return Math.max(-1, Math.min(1, value));
 }
 
 /** Isaac shoots in 4 directions; on diagonals the current aim holds, so the last pressed axis wins. */

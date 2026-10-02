@@ -60,6 +60,7 @@ import {
   twinDef,
 } from '../floor/roomEvents';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
+import { pad } from '../input/touch';
 import { BeamWeapon } from './BeamWeapon';
 import type { BossIntroData } from './BossIntroScene';
 import { ChainShock, type StrikeHost } from './ChainShock';
@@ -275,8 +276,10 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
     if (!this.scene.isActive('hud')) this.scene.launch('hud');
     this.scene.bringToTop('hud');
+    if (!this.scene.isActive('touch')) this.scene.launch('touch');
+    this.scene.bringToTop('touch');
 
-    this.input.keyboard!.on('keydown-ESC', () => this.pause());
+    this.input.keyboard!.on('keydown-ESC', () => this.requestPause());
   }
 
   /** A new phase is announced by name, with the floor under it. */
@@ -294,8 +297,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     return !this.transitioning && !this.gameOver && !this.inBossIntro;
   }
 
-  private pause() {
+  /** Esc or the touch pause button; ignored when an overlay can't open. */
+  requestPause() {
     if (!this.canPause) return;
+    // A thumb still on a stick must not keep the player walking after the pause.
+    pad.releaseAll();
     this.scene.pause();
     this.scene.launch('pause');
     this.scene.bringToTop('pause');
