@@ -2,8 +2,9 @@ import { POOL_DEPTH } from '../combat/balance';
 import { ENEMIES, type EnemyAttack, type EnemyDef } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { type Item, type ItemPool, baseId } from '../combat/stats';
+import { SHOP } from '../combat/shop';
 import { DRIVE, SWING } from '../combat/swing';
-import { LOCK_FROM_DEPTH } from '../floor/locks';
+import { LOCK_CHANCE } from '../floor/locks';
 import { PHASES, type PhaseDef } from '../floor/phases';
 import { EVENT_CHANCE, EVENT_TUNING, ROOM_EVENTS, type RoomEventId } from '../floor/roomEvents';
 import type { MessageKey } from '../i18n';
@@ -71,12 +72,10 @@ export function phaseEntries(phases: readonly PhaseDef[] = PHASES): PhaseEntry[]
   return entries;
 }
 
-/** Room enemies by first floor, each followed by what it splits into. */
-function phaseEnemies(phase: PhaseDef, firstFloor: number): EnemyEntry[] {
-  const sorted = [...phase.enemies].sort((a, b) => a.minDepth - b.minDepth);
+/** Room enemies, each followed by what it splits into; all of them can turn up from the phase's first floor. */
+function phaseEnemies(phase: PhaseDef, fromFloor: number): EnemyEntry[] {
   const entries: EnemyEntry[] = [];
-  for (const { def, minDepth } of sorted) {
-    const fromFloor = Math.max(firstFloor, minDepth);
+  for (const { def } of phase.enemies) {
     entries.push({ def, fromFloor, lines: enemyLines(def) });
     const child = def.split && enemyById(def.split.id);
     if (child) entries.push({ def: child, fromFloor, lines: [splitFrom(def), ...enemyLines(child)] });
@@ -239,7 +238,18 @@ export function swingEntry(): SwingEntry {
       { key: 'wiki.swing.sweep' },
       { key: 'wiki.swing.drive', params: { start: DRIVE.startMax, max: DRIVE.maxCap } },
       { key: 'wiki.swing.doors' },
-      { key: 'wiki.swing.locked', params: { n: LOCK_FROM_DEPTH } },
+      { key: 'wiki.swing.locked', params: { pct: pct(LOCK_CHANCE) } },
     ],
   };
+}
+
+/** The shop's wares and prices, as the game sets them. */
+export function shopLines(): Line[] {
+  const { prices, healShare } = SHOP;
+  return [
+    { key: 'wiki.shop.where', params: { pct: pct(LOCK_CHANCE) } },
+    { key: 'wiki.shop.item', params: { price: prices.item } },
+    { key: 'wiki.shop.heal', params: { price: prices.heal, pct: pct(healShare) } },
+    { key: 'wiki.shop.drive', params: { price: prices.drive, max: DRIVE.maxCap } },
+  ];
 }

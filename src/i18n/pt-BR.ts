@@ -90,6 +90,12 @@ export const ptBR = {
   'summary.menu': 'Esc menu',
   'summary.menu-touch': 'Menu',
 
+  'shop.price': '{n} moedas',
+  'shop.heal.name': 'Cura grande',
+  'shop.heal.hint': 'Recupera {pct}% da vida máxima',
+  'shop.drive.name': 'Carga de drive',
+  'shop.drive.hint': '+1 carga máxima de drive, já carregada',
+
   'item.ether-core.name': 'Núcleo de Éter',
   'item.ether-core.description': 'Dano +1.5',
   'item.quickcast.name': 'Conjuração Rápida',
@@ -270,8 +276,14 @@ export const ptBR = {
     'Cada sala limpa devolve 1 carga. O máximo começa em {start} e chega a {max} com melhorias; sem carga, o golpe não sai.',
   'wiki.swing.doors':
     'Acertar uma porta fechada a abre, mesmo no meio da luta. Voltar a uma sala que não foi limpa tranca tudo de novo.',
-  'wiki.swing.locked': 'A partir do andar {n}, a sala do tesouro fica trancada: só o golpe abre a porta.',
+  'wiki.swing.locked': 'A sala do tesouro e a loja têm {pct}% de chance de estar trancadas: só o golpe abre a porta.',
   'wiki.swing.demo': 'Demonstração do golpe: a chave varre o leque à frente do herói e empurra uma Sombra.',
+  'wiki.shop.name': 'Loja',
+  'wiki.shop.where':
+    'Um beco por andar, quando sobra um; a porta tem {pct}% de chance de estar trancada. Encoste no pedestal para comprar.',
+  'wiki.shop.item': 'Um item do sorteio do tesouro: {price} moedas',
+  'wiki.shop.heal': 'Cura grande, {pct}% da vida máxima: {price} moedas',
+  'wiki.shop.drive': '+1 carga máxima de drive, já carregada, até {max}: {price} moedas',
   'wiki.event.dark.name': 'Sala escura',
   'wiki.event.dark.text':
     'A luz se apaga e os inimigos vêm em {min} a {max} ondas. Cada onda vencida faz chover moedas e orbes de cura.',

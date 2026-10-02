@@ -3,7 +3,7 @@ import type { Rng } from '../core/rng';
 import type { RoomEventId } from './roomEvents';
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
-export type RoomType = 'start' | 'normal' | 'treasure' | 'boss';
+export type RoomType = 'start' | 'normal' | 'treasure' | 'boss' | 'shop';
 
 export const DIRS: Record<Dir, { dx: number; dy: number; opposite: Dir }> = {
   up: { dx: 0, dy: -1, opposite: 'down' },
@@ -120,10 +120,14 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
   realDeadEnds[0].type = 'boss';
   const treasure = realDeadEnds[realDeadEnds.length - 1];
   treasure.type = 'treasure';
+  // A shop only when a third dead end is left over; picking it rolls nothing, so layouts don't change.
+  const shop = realDeadEnds.length >= 3 ? realDeadEnds[realDeadEnds.length - 2] : undefined;
+  if (shop) shop.type = 'shop';
 
   // Rooms without combat start open.
   start.visited = true;
   start.cleared = true;
   treasure.cleared = true;
+  if (shop) shop.cleared = true;
   return new Floor(rooms, start);
 }

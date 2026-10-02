@@ -12,6 +12,7 @@ import {
   itemPools,
   phaseEntries,
   pct,
+  shopLines,
   swingEntry,
 } from './catalog';
 import { enemySprite, itemIcon, phaseShot } from './sprites';
@@ -317,5 +318,26 @@ function eventsSection(): HTMLElement {
     card.id = `event-${id}`;
     return card;
   });
-  return section('events', 'wiki.nav.events', t('wiki.events.intro', eventOdds()), el('div', 'cards', ...cards));
+  return section(
+    'events',
+    'wiki.nav.events',
+    t('wiki.events.intro', eventOdds()),
+    el('div', 'cards', shopCard(), ...cards),
+  );
+}
+
+/** Not an event but a room of its own on most floors; listed with the special rooms. */
+function shopCard(): HTMLElement {
+  const card = el(
+    'article',
+    'card event',
+    el(
+      'div',
+      'card-body',
+      el('h4', undefined, t('wiki.shop.name')),
+      el('ul', 'lines', ...shopLines().map((l) => el('li', undefined, line(l)))),
+    ),
+  );
+  card.id = 'room-shop';
+  return card;
 }
