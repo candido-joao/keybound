@@ -1,5 +1,13 @@
 import Phaser from 'phaser';
-import { ENEMIES, ENEMY_FRAME, ENEMY_WALK_FPS, walkAnimKey, walkFrames } from '../combat/enemies';
+import {
+  BONE_PILE,
+  BONE_PILE_FRAMES,
+  ENEMIES,
+  ENEMY_FRAME,
+  ENEMY_WALK_FPS,
+  walkAnimKey,
+  walkFrames,
+} from '../combat/enemies';
 import { PLACEHOLDER_BODY, placeholderColors } from '../combat/placeholderArt';
 import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
@@ -19,9 +27,6 @@ import {
 /** Light around the player in a dark room: fully lit inside, fading out to the edge. */
 const DARK_LIGHT_INNER = 50;
 const DARK_LIGHT_OUTER = 120;
-
-/** What a revived enemy leaves on the floor. */
-const BONE_PILE = 'bone-pile';
 
 /** Drawn width of the portrait art; big enough that the face fills the keyhole's head. */
 const PORTRAIT_ART_WIDTH = 52;
@@ -47,7 +52,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet(HERO_SHEET, 'hero/walk.png', { frameWidth: HERO_FRAME_W, frameHeight: HERO_FRAME_H });
     const frame = { frameWidth: ENEMY_FRAME, frameHeight: ENEMY_FRAME };
     for (const def of ENEMIES) if (def.frames) this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, frame);
-    this.load.image(BONE_PILE, `enemies/${BONE_PILE}.png`);
+    this.load.spritesheet(BONE_PILE, `enemies/${BONE_PILE}.png`, frame);
   }
 
   /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
@@ -264,19 +269,22 @@ export class BootScene extends Phaser.Scene {
   }
 
   private createEnemyAnims() {
-    for (const def of ENEMIES) {
-      const frames = walkFrames(def.frames ?? 1);
-      const key = walkAnimKey(def.texture);
-      if (frames.length === 0 || !this.textures.exists(def.texture) || this.anims.exists(key)) continue;
-      // A missing strip loads as a single frame: no walk to play.
-      if (this.textures.get(def.texture).frameTotal < def.frames!) continue;
-      this.anims.create({
-        key,
-        frames: frames.map((frame) => ({ key: def.texture, frame })),
-        frameRate: ENEMY_WALK_FPS,
-        repeat: -1,
-      });
-    }
+    for (const def of ENEMIES) this.createStripLoop(def.texture, def.frames ?? 1);
+    this.createStripLoop(BONE_PILE, BONE_PILE_FRAMES);
+  }
+
+  private createStripLoop(texture: string, frameCount: number) {
+    const frames = walkFrames(frameCount);
+    const key = walkAnimKey(texture);
+    if (frames.length === 0 || !this.textures.exists(texture) || this.anims.exists(key)) return;
+    // A missing strip loads as a single frame: no walk to play.
+    if (this.textures.get(texture).frameTotal < frameCount) return;
+    this.anims.create({
+      key,
+      frames: frames.map((frame) => ({ key: texture, frame })),
+      frameRate: ENEMY_WALK_FPS,
+      repeat: -1,
+    });
   }
 
   private drawHeroPortrait(ctx: CanvasRenderingContext2D, cx: number, cy: number) {

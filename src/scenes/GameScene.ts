@@ -21,12 +21,14 @@ import { BASE_STATS, CHAIN_COOLDOWN_MS, enemiesPerRoom } from '../combat/balance
 import { DROPS, type DropKind, type DropLuck, applyDrop, canCollect, rollDrops, withBossHeal } from '../combat/drops';
 import { inBlast, reviveHp, spotAwayFrom } from '../combat/behaviors';
 import {
+  BONE_PILE,
   ENEMIES,
   type EnemyDef,
   type ExplodeAttack,
   type SummonAttack,
   enemyForDepth,
   rollRoomEnemies,
+  walkAnimKey,
 } from '../combat/enemies';
 import { type Item, type PlayerStats, computeStats } from '../combat/stats';
 import { GameClock } from '../core/clock';
@@ -35,7 +37,7 @@ import { type RunCheats, type RunData, type RunStats, newRun } from '../core/run
 import type { DebugTarget } from '../debug/commands';
 import { Bolt } from '../entities/Bolt';
 import { Player } from '../entities/Player';
-import { Enemy } from '../entities/Enemy';
+import { Enemy, OUTLINE_SCALE } from '../entities/Enemy';
 import { HostileOrb } from '../entities/HostileOrb';
 import { DIRS, type Dir, type Floor, type RoomNode, type RoomType, generateFloor } from '../floor/FloorGenerator';
 import {
@@ -101,7 +103,9 @@ const BLAST_KNOCKBACK = 2;
 /** A fallen enemy that gets back up at `reviveAt` unless the player steps on it. */
 interface Pile {
   def: EnemyDef;
-  image: Phaser.GameObjects.Image;
+  image: Phaser.GameObjects.Sprite;
+  /** The body and, for an outlined enemy, its silhouette behind it: they rattle and fall together. */
+  parts: Phaser.GameObjects.Sprite[];
   reviveAt: number;
   rattling: boolean;
   /** Times the enemy under it has already got back up. */
@@ -418,7 +422,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.roomDecor.forEach((o) => o.destroy());
     this.roomDecor = [];
     this.pedestals = [];
-    for (const pile of this.piles) pile.image.destroy();
+    for (const pile of this.piles) for (const part of pile.parts) part.destroy();
     this.piles = [];
     this.walls.clear(true, true);
     this.doorBlocks.clear(true, true);
@@ -651,8 +655,22 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   private dropPile(def: EnemyDef, x: number, y: number, revivals: number) {
-    const image = this.add.image(x, y, 'bone-pile').setDepth(3);
-    this.piles.push({ def, image, reviveAt: this.clock.now + def.revive!.delayMs, rattling: false, revivals });
+    const image = this.add.sprite(x, y, BONE_PILE).setDepth(3);
+    const parts = [image];
+    // A cursed skeleton's bones keep the darkness that cursed it.
+    if (def.outline !== undefined) {
+      const outline = this.add
+        .sprite(x, y, BONE_PILE)
+        .setTintMode(Phaser.TintModes.FILL)
+        .setTint(def.outline)
+        .setScale(OUTLINE_SCALE)
+        .setAlpha(0.9)
+        .setDepth(image.depth - 0.1);
+      parts.push(outline);
+    }
+    const anim = walkAnimKey(BONE_PILE);
+    if (this.anims.exists(anim)) for (const part of parts) part.play(anim);
+    this.piles.push({ def, image, parts, reviveAt: this.clock.now + def.revive!.delayMs, rattling: false, revivals });
   }
 
   /** Stepping on a pile finishes it; left alone, it rattles and gets back up with part of its HP. */
@@ -660,7 +678,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const stomp = STOMP_RADIUS * STOMP_RADIUS;
     for (let i = this.piles.length - 1; i >= 0; i--) {
       const pile = this.piles[i];
-      const { image, def } = pile;
+      const { image, parts, def } = pile;
       if (Phaser.Math.Distance.Squared(image.x, image.y, this.player.x, this.player.y) < stomp) {
         this.piles.splice(i, 1);
         this.crushPile(pile);
@@ -668,12 +686,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       }
       if (!pile.rattling && time >= pile.reviveAt - PILE_RATTLE_MS) {
         pile.rattling = true;
-        this.tweens.add({ targets: image, x: image.x + 2, duration: 50, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: parts, x: image.x + 2, duration: 50, yoyo: true, repeat: -1 });
       }
       if (time < pile.reviveAt) continue;
       this.piles.splice(i, 1);
-      this.tweens.killTweensOf(image);
-      image.destroy();
+      this.tweens.killTweensOf(parts);
+      for (const part of parts) part.destroy();
       const enemy = this.spawnEnemy(def, image.x, image.y, this.dropRng.next() * 1000);
       enemy.hp = reviveHp(def.hp, def.revive!.hpShare);
       enemy.revivals = pile.revivals + 1;
@@ -681,14 +699,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   private crushPile(pile: Pile) {
-    const { image, def } = pile;
-    this.tweens.killTweensOf(image);
+    const { image, parts, def } = pile;
+    this.tweens.killTweensOf(parts);
     this.tweens.add({
-      targets: image,
+      targets: parts,
       scaleY: 0.2,
       alpha: 0,
       duration: 160,
-      onComplete: () => image.destroy(),
+      onComplete: () => parts.forEach((part) => part.destroy()),
     });
     this.reward(def, image.x, image.y);
   }
