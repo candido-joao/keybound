@@ -5,6 +5,7 @@ import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_H, ROOM_W, ROO
 import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
 import { phaseAt } from '../floor/phases';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
+import { pad } from '../input/touch';
 import { HealthTrail } from '../ui/healthTrail';
 import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, gaugeLength, keyholeOutline, traceGauge } from '../ui/hpGauge';
 import { HERO_PORTRAIT_ART, KEY_ICON_ART, type Player } from '../entities/Player';
@@ -132,7 +133,7 @@ export class HudScene extends Phaser.Scene {
     const game = this.scene.get('game') as GameScene;
     if (!game.player?.active) return;
 
-    const expanded = this.tab.isDown && !game.scene.isPaused();
+    const expanded = (this.tab.isDown || pad.isHeld('map')) && !game.scene.isPaused();
     this.drawHealthBar(game.player, delta);
     this.drawMinimap(game, expanded ? BIG : MINI, expanded);
     this.floorLabel.setVisible(expanded);

@@ -1,15 +1,18 @@
 import { type Locale, isLocale } from '../i18n';
+import type { StickMode } from '../input/pad';
 
 export interface Settings {
   /** Null until the player picks one; the browser language decides meanwhile. */
   locale: Locale | null;
   /** Debug console available with the ' key. Off unless turned on with ?console. */
   console: boolean;
+  /** Touch sticks: fixed in the corners, or floating under the thumb. */
+  stickMode: StickMode;
 }
 
 const STORAGE_KEY = 'keybound.settings';
 const VERSION = 1;
-const DEFAULTS: Settings = { locale: null, console: false };
+const DEFAULTS: Settings = { locale: null, console: false, stickMode: 'fixed' };
 
 /** Never throws: storage can be blocked (private mode) or hold data from another version. */
 export function loadSettings(): Settings {
@@ -30,11 +33,17 @@ export function saveSettings(settings: Settings) {
   }
 }
 
+/** Reads versioned settings, defaulting invalid or missing fields so older saves remain usable. */
 export function parseSettings(data: unknown): Settings {
   if (typeof data !== 'object' || data === null) return { ...DEFAULTS };
   const record = data as Record<string, unknown>;
   if (record.version !== VERSION) return { ...DEFAULTS };
-  return { locale: isLocale(record.locale) ? record.locale : null, console: record.console === true };
+  return {
+    locale: isLocale(record.locale) ? record.locale : null,
+    console: record.console === true,
+    // Saves from before the option read as the default.
+    stickMode: record.stickMode === 'floating' ? 'floating' : 'fixed',
+  };
 }
 
 const CONSOLE_OFF = ['off', '0', 'false'];
