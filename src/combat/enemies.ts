@@ -299,7 +299,8 @@ export const CRYSTAL_SHARD: EnemyDef = {
   hp: 4,
   hpGrowth: 0.15,
   speed: 165,
-  scale: 1,
+  // A piece of the sentinel: drawn smaller than what it broke off from.
+  scale: 0.65,
   spawnMs: 150,
   contactDamage: 6,
   boss: false,

@@ -284,7 +284,7 @@ export const ITEMS: readonly Item[] = [
     }),
   },
   {
-    // About four shots' worth per beam, at twice the charge.
+    // About seven shots' worth per beam, at twice the charge.
     ...texts('arcane-beam:overcharged'),
     base: 'arcane-beam',
     weight: EXTREME,
