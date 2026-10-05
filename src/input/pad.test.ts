@@ -111,6 +111,44 @@ describe('VirtualPad', () => {
   });
 });
 
+describe('VirtualPad.setView', () => {
+  const WIDE = { left: -120, top: 0, right: 1080, bottom: 540 };
+
+  it('moves the sticks and the swing button out into the side margins', () => {
+    const pad = new VirtualPad(LAYOUT, 'fixed');
+    pad.setView(WIDE);
+    expect([pad.move.baseX, pad.move.baseY]).toEqual([-50, 450]);
+    expect([pad.aim.baseX, pad.aim.baseY]).toEqual([1010, 450]);
+    expect(pad.button('swing')).toEqual({ x: 1010, y: 340, r: 30 });
+    expect(pad.button('map')).toEqual(LAYOUT.buttons.map);
+  });
+
+  it('takes touches in the margin, outside the game', () => {
+    const pad = new VirtualPad(LAYOUT, 'fixed');
+    pad.setView(WIDE);
+    pad.press(1, -50, 450);
+    pad.drag(1, -100, 500);
+    expect(pad.moveX).toBeLessThan(0);
+    expect(pad.moveY).toBeGreaterThan(0);
+    expect(pad.press(2, 1010, 340)).toBe('swing');
+  });
+
+  it('keeps a floating stick within the visible screen', () => {
+    const pad = new VirtualPad(LAYOUT, 'floating');
+    pad.setView(WIDE);
+    pad.press(1, -115, 535);
+    expect([pad.move.baseX, pad.move.baseY]).toEqual([-70, 490]);
+  });
+
+  it('drops held touches when the view changes', () => {
+    const pad = new VirtualPad(LAYOUT, 'fixed');
+    pad.press(1, 170, 450);
+    pad.setView(WIDE);
+    expect(pad.move.active).toBe(false);
+    expect(pad.moveX).toBe(0);
+  });
+});
+
 describe('VirtualPad.consume', () => {
   it('reports each press once, even after a quick release', () => {
     const pad = new VirtualPad(LAYOUT, 'fixed');
