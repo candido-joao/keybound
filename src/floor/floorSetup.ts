@@ -37,6 +37,7 @@ export function setUpFloor(seed: string, depth: number, owned: readonly Item[]):
   return { floor, boss, roomItems };
 }
 
+/** Assigns treasure and boss rewards from the item stream, preferring item bases not yet owned. */
 function rollRoomItems(seed: string, depth: number, rooms: readonly RoomNode[], owned: readonly Item[]) {
   const rewardRooms = rooms.filter((r) => r.type === 'treasure' || r.type === 'boss');
   const rewards = rollRewards(new Rng(`${seed}:items:${depth}`), ITEMS, owned, rewardRooms.length, depth);
