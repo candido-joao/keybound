@@ -43,6 +43,19 @@ export class SummaryScene extends Phaser.Scene {
     ].join('   ·   ');
     this.add.text(cx, 200, line, { ...style, fontSize: '15px' }).setOrigin(0.5);
 
+    this.addItemsAndSeed(game, style);
+    const action = { ...style, fontSize: '14px', color: COLORS.textDim };
+    const buttons = [
+      this.add.text(cx - 190, 430, t(hintKey('summary.new-run')), action).setOrigin(0.5),
+      this.add.text(cx, 430, t(hintKey('summary.same-seed')), action).setOrigin(0.5),
+      this.add.text(cx + 190, 430, t(hintKey('summary.menu')), action).setOrigin(0.5),
+    ];
+
+    this.time.delayedCall(INPUT_DELAY_MS, () => this.bindInput(game, buttons));
+  }
+
+  private addItemsAndSeed(game: GameScene, style: Phaser.Types.GameObjects.Text.TextStyle) {
+    const cx = GAME_W / 2;
     const items = game.items.length > 0 ? summarizeItems(game.items) : t('summary.no-items');
     this.add
       .text(cx, 240, items, {
@@ -62,14 +75,6 @@ export class SummaryScene extends Phaser.Scene {
         color: COLORS.textDim,
       })
       .setOrigin(0.5);
-    const action = { ...style, fontSize: '14px', color: COLORS.textDim };
-    const buttons = [
-      this.add.text(cx - 190, 430, t(hintKey('summary.new-run')), action).setOrigin(0.5),
-      this.add.text(cx, 430, t(hintKey('summary.same-seed')), action).setOrigin(0.5),
-      this.add.text(cx + 190, 430, t(hintKey('summary.menu')), action).setOrigin(0.5),
-    ];
-
-    this.time.delayedCall(INPUT_DELAY_MS, () => this.bindInput(game, buttons));
   }
 
   private bindInput(game: GameScene, [newRun, sameSeed, menu]: Phaser.GameObjects.Text[]) {

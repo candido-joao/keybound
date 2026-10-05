@@ -15,6 +15,7 @@
 - Não use `else`: prefira guard clauses e early return.
 - Não aninhe `if` dentro de `if` nem loop dentro de loop: extraia uma função ou percorra uma lista plana.
 - Comente só o porquê que o código não mostra. Nada de comentário que repete o código.
+- Phaser só na camada listada em `layers.js` (cenas e objetos de jogo); arquivo novo fora dela já nasce puro. Cena grande vira sistemas em `scenes/` que leem o estado pela cena (veja `GameScene`).
 - Separe a lógica de jogo pura (atributos, vida, drops, desbloqueios, geração de andar) do Phaser. Ela não importa `phaser` e fica testável isolada; cenas e entidades só leem esse estado e desenham. A migração é gradual, feita junto com cada mudança.
 - Conteúdo (itens, inimigos, bosses, fases, personagens) vive em registros de dados, no padrão de `ITEMS`.
 - Texto visível ao jogador fica em `src/i18n`, nunca literal no código. `pt-BR.ts` define as chaves; `en-US.ts` e `es.ts` precisam traduzir todas (o `tsc` falha se faltar). Registros de conteúdo guardam a chave, não o texto. Exceção: o console de debug (`src/debug`) é ferramenta de desenvolvimento, com comandos e respostas só em inglês.
@@ -26,9 +27,9 @@
 ## Verificação
 
 - Antes de qualquer push, precisam passar:
-  - `pnpm lint`: ESLint. Bloqueia `else`, `if` dentro de `if`, loop dentro de loop, `Math.random` e `phaser` importado na lógica pura.
+  - `pnpm lint`: ESLint. Bloqueia `else`, `if` dentro de `if`, loop dentro de loop, `Math.random` e `phaser` fora da camada Phaser (`layers.js`). Limites: 400 linhas por arquivo, 40 por função, 6 parâmetros, complexidade 10; registros de conteúdo e i18n ficam fora dos limites.
   - `pnpm format:check`: Prettier. `pnpm format` corrige.
-  - `pnpm test`: vitest, para a lógica pura (`*.test.ts` ao lado do arquivo testado).
+  - `pnpm test`: vitest com cobertura, para a lógica pura (`*.test.ts` ao lado do arquivo testado). Falha abaixo da meta em `vitest.config.ts`.
   - `pnpm build`: `tsc` e `vite build`.
 - `pnpm perf`: teste de estresse num Chromium headless (Edge ou Chrome; `PERF_BROWSER` aponta outro). Sala cheia e tiro contínuo; falha acima do orçamento de script por frame, crescimento de heap e tamanho do pool. Rode em mudanças no loop de update, na física, nos projéteis ou no HUD. Fica fora do CI por depender de navegador.
 - O CI (`.github/workflows/ci.yml`) roda essas quatro checagens em PRs para `development` e `main` e em push na `development`.

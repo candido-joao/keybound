@@ -386,6 +386,11 @@ export class FlowField {
   }
 }
 
+export interface Spot {
+  x: number;
+  y: number;
+}
+
 /** Sample spacing along a line of sight; well under a tile, so no corner is skipped. */
 const SIGHT_STEP = TILE / 4;
 
@@ -396,14 +401,14 @@ const SIGHT_STEP = TILE / 4;
 export function straightPath(
   grid: ObstacleGrid,
   flying: boolean,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
+  from: Readonly<Spot>,
+  to: Readonly<Spot>,
   radius: number,
 ): boolean {
-  const dx = x1 - x0;
-  const dy = y1 - y0;
+  const x0 = from.x;
+  const y0 = from.y;
+  const dx = to.x - x0;
+  const dy = to.y - y0;
   const length = Math.hypot(dx, dy);
   if (length === 0) return true;
   const nx = (-dy / length) * radius;

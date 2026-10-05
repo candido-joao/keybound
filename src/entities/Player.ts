@@ -131,10 +131,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   move() {
-    const k = this.keys;
-    // Keys give full steps; the stick also gives partial ones, which walk slower.
-    const ix = clampAxis((k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0) + pad.moveX);
-    const iy = clampAxis((k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0) + pad.moveY);
+    const ix = this.walkX();
+    const iy = this.walkY();
     const len = Math.max(1, Math.hypot(ix, iy));
     const body = this.body as Phaser.Physics.Arcade.Body;
 
@@ -147,7 +145,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.moveX = ix;
     this.moveY = iy;
     if (!this.animated && ix !== 0) this.setFlipX(ix < 0);
-    this.setAlpha(this.invulnerable ? (Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1) : 1);
+    this.setAlpha(this.blinkAlpha());
+  }
+
+  /** WASD give full steps; the stick also gives partial ones, which walk slower. */
+  private walkX(): number {
+    return clampAxis((this.keys.D.isDown ? 1 : 0) - (this.keys.A.isDown ? 1 : 0) + pad.moveX);
+  }
+
+  private walkY(): number {
+    return clampAxis((this.keys.S.isDown ? 1 : 0) - (this.keys.W.isDown ? 1 : 0) + pad.moveY);
+  }
+
+  /** Flickers while invulnerable. */
+  private blinkAlpha(): number {
+    if (!this.invulnerable) return 1;
+    return Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1;
   }
 
   /** Space or the touch swing button, once per press. Both are read so neither press lingers. */

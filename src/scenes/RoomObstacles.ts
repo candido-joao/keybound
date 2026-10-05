@@ -139,7 +139,7 @@ export class RoomObstacles {
     const flying = enemy.def.flies === true;
     const body = enemy.body as Phaser.Physics.Arcade.Body;
     const { x, y } = body.center;
-    if (straightPath(this.grid, flying, x, y, target.x, target.y, body.halfWidth)) return target;
+    if (straightPath(this.grid, flying, body.center, target, body.halfWidth)) return target;
     const next = (flying ? this.air : this.ground).next(colAt(x), rowAt(y));
     if (next < 0) return target;
     const col = next % ROOM_COLS;

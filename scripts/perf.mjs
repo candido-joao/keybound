@@ -99,7 +99,7 @@ const SETUP = `(() => {
   const def = g.enemies.getChildren()[0]?.def;
   window.__refill = setInterval(() => {
     const missing = ${ENEMY_COUNT} - g.enemies.countActive();
-    for (let i = 0; i < missing; i++) g.spawnEnemy(def, 200 + i * 40, 160 + (i % 3) * 120);
+    for (let i = 0; i < missing; i++) g.spawner.spawn(def, 200 + i * 40, 160 + (i % 3) * 120);
   }, 250);
   return Boolean(def);
 })()`;
@@ -117,7 +117,7 @@ const MEASURE = `new Promise((resolve) => {
   requestAnimationFrame(step);
 })`;
 
-const BOLTS = `window.game.scene.getScene('game').bolts.getLength()`;
+const BOLTS = `window.game.scene.getScene('game').shots.bolts.getLength()`;
 
 /** Kills the whole process tree: on Windows the shell's child (vite, browser helpers) outlives a plain kill. */
 function stop(child) {

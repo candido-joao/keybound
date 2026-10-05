@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { addItemIcon } from '../combat/items';
+import { addItemIcon } from './itemIcon';
 import { type Item, countItems } from '../combat/stats';
 import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_H, ROOM_W, ROOM_X, ROOM_Y } from '../config';
 import { DIRS, type Dir, type RoomNode, type RoomType } from '../floor/FloorGenerator';
@@ -16,6 +16,12 @@ interface MapLayout {
   y: number;
   cellW: number;
   cellH: number;
+}
+
+/** Isaac rule: visited rooms plus their direct neighbors are shown. */
+function shownOnMap(game: GameScene, room: RoomNode): boolean {
+  if (game.mapRevealed || room.visited) return true;
+  return (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
 }
 
 const MINI: MapLayout = { x: GAME_W - FLOOR_GRID_W * 13 - 12, y: 8, cellW: 13, cellH: 9 };
@@ -385,36 +391,31 @@ export class HudScene extends Phaser.Scene {
     this.drawnMapRoom = game.room;
     this.drawnMapExpanded = expanded;
     this.drawnMapRevealed = game.mapRevealed;
-    const { cellW, cellH } = layout;
     const g = this.map.clear();
     if (expanded) g.fillStyle(0x000000, 0.5).fillRect(0, 0, GAME_W, GAME_H);
     g.fillStyle(0x000000, expanded ? 0.75 : 0.45).fillRect(
       layout.x - 4,
       layout.y - 4,
-      FLOOR_GRID_W * cellW + 8,
-      FLOOR_GRID_H * cellH + 8,
+      FLOOR_GRID_W * layout.cellW + 8,
+      FLOOR_GRID_H * layout.cellH + 8,
     );
-
-    const gap = expanded ? 4 : 2;
     for (const room of game.floor.rooms.values()) {
-      // Isaac rule: visited rooms plus their direct neighbors are shown.
-      const revealed =
-        game.mapRevealed ||
-        room.visited ||
-        (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
-      if (!revealed) continue;
-
-      const x = layout.x + room.x * cellW;
-      const y = layout.y + room.y * cellH;
-      const current = room === game.room;
-      g.fillStyle(current ? 0xffffff : room.visited ? 0x8d84b8 : 0x3d365e).fillRect(x, y, cellW - gap, cellH - gap);
-
-      const marker = MAP_MARKER[room.type];
-      if (marker !== undefined) {
-        const inset = expanded ? 8 : 3;
-        g.fillStyle(marker).fillRect(x + inset, y + inset * 0.7, cellW - gap - inset * 2, cellH - gap - inset * 1.4);
-      }
+      if (shownOnMap(game, room)) this.drawMapRoom(room, room === game.room, layout, expanded);
     }
+  }
+
+  private drawMapRoom(room: RoomNode, current: boolean, layout: MapLayout, expanded: boolean) {
+    const { cellW, cellH } = layout;
+    const gap = expanded ? 4 : 2;
+    const x = layout.x + room.x * cellW;
+    const y = layout.y + room.y * cellH;
+    const fill = current ? 0xffffff : room.visited ? 0x8d84b8 : 0x3d365e;
+    this.map.fillStyle(fill).fillRect(x, y, cellW - gap, cellH - gap);
+
+    const marker = MAP_MARKER[room.type];
+    if (marker === undefined) return;
+    const inset = expanded ? 8 : 3;
+    this.map.fillStyle(marker).fillRect(x + inset, y + inset * 0.7, cellW - gap - inset * 2, cellH - gap - inset * 1.4);
   }
 
   /** One faded icon per distinct item; rebuilt only when the inventory changes. */

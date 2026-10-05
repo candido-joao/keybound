@@ -177,15 +177,16 @@ describe('FlowField', () => {
 });
 
 describe('straightPath', () => {
+  const at = (col: number, row: number) => ({ x: tileX(col), y: tileY(row) });
   const grid = gridOf(['...', '.#.', '...']);
 
   it('is blocked by rock in the way', () => {
-    expect(straightPath(grid, false, tileX(1), tileY(2), tileX(3), tileY(2), 0)).toBe(false);
+    expect(straightPath(grid, false, at(1, 2), at(3, 2), 0)).toBe(false);
   });
 
   it('is clear beside it, unless the body is too wide', () => {
-    expect(straightPath(grid, false, tileX(1), tileY(1), tileX(3), tileY(1), 10)).toBe(true);
-    expect(straightPath(grid, false, tileX(1), tileY(1), tileX(3), tileY(1), 30)).toBe(false);
+    expect(straightPath(grid, false, at(1, 1), at(3, 1), 10)).toBe(true);
+    expect(straightPath(grid, false, at(1, 1), at(3, 1), 30)).toBe(false);
   });
 });
 
