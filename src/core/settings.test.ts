@@ -6,7 +6,7 @@ describe('parseSettings', () => {
     expect(parseSettings({ version: 1, locale: 'es', console: true })).toEqual({
       locale: 'es',
       console: true,
-      stickMode: 'fixed',
+      stickMode: 'floating',
     });
   });
 
@@ -14,13 +14,13 @@ describe('parseSettings', () => {
     expect(parseSettings({ version: 1, locale: 'pt-BR' })).toEqual({
       locale: 'pt-BR',
       console: false,
-      stickMode: 'fixed',
+      stickMode: 'floating',
     });
   });
 
-  it('reads the stick mode, falling back to fixed', () => {
-    expect(parseSettings({ version: 1, locale: null, stickMode: 'floating' }).stickMode).toBe('floating');
-    expect(parseSettings({ version: 1, locale: null, stickMode: 'wobbly' }).stickMode).toBe('fixed');
+  it('reads the stick mode, falling back to floating', () => {
+    expect(parseSettings({ version: 1, locale: null, stickMode: 'fixed' }).stickMode).toBe('fixed');
+    expect(parseSettings({ version: 1, locale: null, stickMode: 'wobbly' }).stickMode).toBe('floating');
   });
 
   it('accepts only a real true', () => {
