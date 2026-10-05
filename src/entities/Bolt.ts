@@ -19,6 +19,11 @@ export interface BoltSpec {
 /** How long the burst puff takes to grow and fade. */
 const BURST_MS = 160;
 const BURST_GROWTH = 2.2;
+/**
+ * Over the floor, pits and drops, under enemies. Fixed, because pooled bolts outlive the room:
+ * left at 0 they'd sit under the next room's floor, drawn after them.
+ */
+const DEPTH = 4.5;
 
 /**
  * Player projectile. Pooled by GameScene: `launch` takes one out; a burst turns it into its own
@@ -60,7 +65,7 @@ export class Bolt extends Phaser.Physics.Arcade.Image {
     this.speed = spec.speed;
     this.startX = spec.x;
     this.startY = spec.y;
-    this.setScale(spec.scale);
+    this.setScale(spec.scale).setDepth(DEPTH);
     this.setBlendMode(Phaser.BlendModes.ADD);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
