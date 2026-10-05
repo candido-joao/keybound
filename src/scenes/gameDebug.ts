@@ -24,6 +24,7 @@ export function debugTarget(game: GameScene): DebugTarget {
   };
 }
 
+/** Returns callbacks that read current run state when invoked, even after console commands change it. */
 function readouts(game: GameScene) {
   return {
     depth: () => game.depth,
@@ -35,6 +36,7 @@ function readouts(game: GameScene) {
   };
 }
 
+/** Adapts console setters to run state, refreshing derived stats and keeping health within its maximum. */
 function cheats(
   game: GameScene,
 ): Pick<DebugTarget, 'markSeeded' | 'setHealth' | 'setGod' | 'setDrive' | 'setStat' | 'revealMap'> {
@@ -74,6 +76,7 @@ function startEvent(game: GameScene, id: RoomEventId): boolean {
   return true;
 }
 
+/** Adds the requested copies of a known item and refreshes stats; unknown IDs leave the run unchanged. */
 function give(game: GameScene, itemId: string, count: number) {
   const item = ITEMS.find((i) => i.id === itemId);
   if (!item) return;
@@ -81,6 +84,7 @@ function give(game: GameScene, itemId: string, count: number) {
   game.refreshStats();
 }
 
+/** Removes the last matching item and refreshes stats, returning false when the player has none. */
 function take(game: GameScene, itemId: string): boolean {
   const index = game.items.findLastIndex((i) => i.id === itemId);
   if (index < 0) return false;
@@ -99,6 +103,7 @@ function placeItem(game: GameScene, itemId: string) {
   game.pedestals.placeItem(col, row - 2 >= 1 ? row - 2 : row + 2, item);
 }
 
+/** Kills active enemies and crushes bone piles for rewards; the returned count includes only enemies. */
 function killAll(game: GameScene): number {
   let killed = 0;
   for (const enemy of [...game.enemyGroup()]) {

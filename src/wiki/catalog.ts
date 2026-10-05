@@ -99,6 +99,7 @@ export function enemyLines(def: EnemyDef): Line[] {
   return [...def.attacks.map(attackLine), ...bossLines(def), ...movementLines(def), ...splitLines(def)];
 }
 
+/** Builds translatable boss, fury and revival traits, converting health shares and delays for display. */
 function bossLines(def: EnemyDef): Line[] {
   const lines: Line[] = [];
   if (def.boss) lines.push({ key: 'wiki.trait.boss' });
@@ -121,10 +122,12 @@ const MOVEMENT_TRAITS = [
   ['flies', 'wiki.trait.flies'],
 ] as const satisfies readonly (readonly [keyof EnemyDef, MessageKey])[];
 
+/** Lists enabled movement traits in the fixed display order shared by all enemy entries. */
 function movementLines(def: EnemyDef): Line[] {
   return MOVEMENT_TRAITS.filter(([trait]) => def[trait]).map(([, key]) => ({ key }));
 }
 
+/** Describes split offspring by count and translated name, omitting missing child definitions. */
 function splitLines(def: EnemyDef): Line[] {
   const child = def.split && enemyById(def.split.id);
   if (!def.split || !child) return [];
@@ -151,6 +154,7 @@ export function attackLine(attack: EnemyAttack): Line {
   return volleyLine(attack);
 }
 
+/** Chooses a burst, single shot, ring or fan description, giving repeated bursts precedence. */
 function volleyLine(attack: VolleyAttack): Line {
   const { count, damage } = attack;
   if ((attack.shots ?? 1) > 1) return { key: 'wiki.attack.volley.burst', params: { shots: attack.shots!, damage } };

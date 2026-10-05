@@ -84,6 +84,7 @@ function tryGenerateSize(rng: Rng, size: number): Floor | null {
   return null;
 }
 
+/** Returns a floor only when growth reaches the target size and leaves at least two true dead ends. */
 function tryGenerate(rng: Rng, target: number): Floor | null {
   const { rooms, start, deadEnds } = growLayout(rng, target);
   // A room can be marked dead-end and later gain a neighbor; recheck.
@@ -93,6 +94,7 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
   return new Floor(rooms, start);
 }
 
+/** Counts occupied cardinal neighbors so growth cannot join an existing branch into a loop. */
 function occupiedNeighbors(rooms: ReadonlyMap<string, RoomNode>, x: number, y: number): number {
   return Object.values(DIRS).filter(({ dx, dy }) => rooms.has(key(x + dx, y + dy))).length;
 }

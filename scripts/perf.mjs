@@ -33,6 +33,7 @@ const BROWSERS = [
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Attempts up to 240 calls, pausing 250 ms after rejected or undefined results before trying again. */
 async function retry(fn) {
   for (let i = 0; i < 240; i++) {
     const value = await fn().catch(() => undefined);
@@ -42,6 +43,7 @@ async function retry(fn) {
   throw new Error('timed out waiting for the server or the browser');
 }
 
+/** Opens a DevTools session with command and evaluation helpers, collecting runtime exceptions. */
 function connect(url) {
   const ws = new WebSocket(url);
   const pending = new Map();
@@ -168,6 +170,7 @@ async function run(browserPath, profile) {
   }
 }
 
+/** Prints frame, memory and pool measurements; returns false for exceeded budgets or runtime exceptions. */
 function report({ frames, scriptMs, bolts, allocation, heapGrowth, errors }) {
   const avg = frames.reduce((sum, f) => sum + f, 0) / frames.length;
   const result = {
