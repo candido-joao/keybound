@@ -49,20 +49,49 @@ function connect(url) {
   const pending = new Map();
   const errors = [];
   let id = 0;
+  let failure;
   ws.onmessage = (event) => {
     const message = JSON.parse(event.data);
     if (message.method === 'Runtime.exceptionThrown')
       errors.push(message.params.exceptionDetails.exception?.description);
-    if (message.id && pending.has(message.id)) pending.get(message.id)(message.result ?? message.error);
+    const command = pending.get(message.id);
+    if (!command) return;
+    pending.delete(message.id);
+    command.resolve(message.result ?? message.error);
   };
   const send = (method, params = {}) =>
-    new Promise((resolve) => {
-      pending.set(++id, resolve);
-      ws.send(JSON.stringify({ id, method, params }));
+    new Promise((resolve, reject) => {
+      if (failure) return reject(failure);
+      const commandId = ++id;
+      pending.set(commandId, { resolve, reject });
+      try {
+        ws.send(JSON.stringify({ id: commandId, method, params }));
+      } catch (error) {
+        pending.delete(commandId);
+        reject(error);
+      }
     });
   const evaluate = async (expression) =>
     (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.value;
-  return new Promise((resolve) => (ws.onopen = () => resolve({ ws, send, evaluate, errors })));
+  return new Promise((resolve, reject) => {
+    const fail = (error) => {
+      failure ??= error;
+      clearTimeout(timeout);
+      reject(failure);
+      for (const command of pending.values()) command.reject(failure);
+      pending.clear();
+    };
+    const timeout = setTimeout(() => {
+      fail(new Error('timed out connecting to the browser WebSocket'));
+      ws.close();
+    }, 10000);
+    ws.onerror = () => fail(new Error('browser WebSocket error'));
+    ws.onclose = () => fail(new Error('browser WebSocket closed'));
+    ws.onopen = () => {
+      clearTimeout(timeout);
+      if (!failure) resolve({ ws, send, evaluate, errors });
+    };
+  });
 }
 
 async function metric(send, name) {
@@ -78,7 +107,10 @@ const heapMb = async (send) => (await metric(send, 'JSHeapUsedSize')) / 1024 / 1
  */
 async function allocationMbPerS(send, done) {
   let finished = false;
-  done.then(() => (finished = true));
+  done.then(
+    () => (finished = true),
+    () => (finished = true),
+  );
   const start = performance.now();
   let last = await heapMb(send);
   let allocated = 0;
@@ -121,10 +153,22 @@ const MEASURE = `new Promise((resolve) => {
 
 const BOLTS = `window.game.scene.getScene('game').shots.bolts.getLength()`;
 
-/** Kills the whole process tree: on Windows the shell's child (vite, browser helpers) outlives a plain kill. */
-function stop(child) {
-  if (process.platform !== 'win32') return child.kill();
-  spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+/** Signals the process tree and waits for the close listener registered at spawn time. */
+async function stop(child, closed, processGroup = false) {
+  if (child.pid && process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    return closed;
+  }
+  if (!child.pid || !processGroup) {
+    child.kill();
+    return closed;
+  }
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+  return closed;
 }
 
 function percentile(values, share) {
@@ -133,7 +177,11 @@ function percentile(values, share) {
 }
 
 async function run(browserPath, profile) {
-  const server = spawn('pnpm', ['exec', 'vite', '--port', String(PORT), '--strictPort'], { shell: true });
+  const server = spawn('pnpm', ['exec', 'vite', '--port', String(PORT), '--strictPort'], {
+    shell: true,
+    detached: process.platform !== 'win32',
+  });
+  const serverClosed = new Promise((resolve) => server.once('close', resolve));
   const browser = spawn(browserPath, [
     '--headless=new',
     `--remote-debugging-port=${DEBUG_PORT}`,
@@ -141,6 +189,7 @@ async function run(browserPath, profile) {
     '--window-size=1280,800',
     'about:blank',
   ]);
+  const browserClosed = new Promise((resolve) => browser.once('close', resolve));
   try {
     await retry(() => fetch(`http://localhost:${PORT}/`).then((r) => r.ok || undefined));
     const pages = await retry(() => fetch(`http://127.0.0.1:${DEBUG_PORT}/json`).then((r) => r.json()));
@@ -165,8 +214,7 @@ async function run(browserPath, profile) {
     ws.close();
     return { frames, scriptMs, bolts, allocation, heapGrowth: heapAfter - heapBefore, errors };
   } finally {
-    stop(browser);
-    stop(server);
+    await Promise.all([stop(browser, browserClosed), stop(server, serverClosed, true)]);
   }
 }
 
