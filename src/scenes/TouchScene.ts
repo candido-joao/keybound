@@ -62,6 +62,7 @@ export class TouchScene extends Phaser.Scene {
     }
     if (show !== this.shown) {
       this.shown = show;
+      if (!show) pad.releaseAll();
       this.dirty = true;
     }
     if (!this.dirty) return;
