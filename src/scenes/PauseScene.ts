@@ -74,7 +74,7 @@ export class PauseScene extends Phaser.Scene {
     this.scene.stop();
     const game = this.scene.get('game') as GameScene;
     if (newRun) {
-      game.restartRun(false);
+      game.restartRun();
       return;
     }
     // Phaser already reset the game scene's keys when it paused.

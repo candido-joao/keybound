@@ -11,24 +11,14 @@ import {
   findAttack,
   walkAnimKey,
 } from '../combat/enemies';
-import { type Bounds, type Velocity, ricochet } from '../combat/ricochet';
 import { RangeTrigger, fanAngle } from '../combat/volley';
-import { ROOM_H, ROOM_W, ROOM_X, ROOM_Y, TILE } from '../config';
 import type { GameClock } from '../core/clock';
+import { EnemyEyes } from './EnemyEyes';
+import { EnemyFury } from './EnemyFury';
+import { EnemyOutline, deathBurst } from './EnemyOutline';
 
 const SPAWN_MS = 550;
-/** Eye positions on the 32 px shadow texture, from its center; scaled with the enemy. */
-const EYE_OFFSETS = [
-  { x: -5, y: 1 },
-  { x: 5, y: 1 },
-] as const;
-/** How much bigger the outline silhouette is than the body: about 2 px on each side of a 32 px sprite. */
-export const OUTLINE_SCALE = 1.14;
 
-/** After the transition, a short breather before the first furious dash. */
-const FURY_FIRST_DASH_MS = 800;
-/** The glow texture is 8 px; at this share of the enemy's scale it just covers an eye. */
-const EYE_GLOW_SCALE = 0.9;
 /** A dash never follows a volley straight away, so the orbs stay the thing to dodge. */
 const VOLLEY_DASH_GAP_MS = 600;
 
@@ -107,21 +97,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   /** Pending volley: the eye glow ends here and the orbs fly. */
   private volleyFireAt = Infinity;
 
-  private furyState: 'calm' | 'transition' | 'fury' = 'calm';
-  private furyReadyAt = Infinity;
-  private nextFuryDashAt = Infinity;
-  /** Pending furious dash: the eye flash ends here and the dash sets off. */
-  private furyLaunchAt = Infinity;
-  private furyDashUntil = 0;
-  /** Locked when the flash starts; flipped in place on each bounce. */
-  private furyVelocity: Velocity = { vx: 0, vy: 0 };
-  /** Room edges for this body's center; fixed, since the body never changes size. */
-  private furyBounds?: Bounds;
-  private aura?: Phaser.GameObjects.Particles.ParticleEmitter;
-  private dust?: Phaser.GameObjects.Particles.ParticleEmitter;
-  private eyes: Phaser.GameObjects.Image[] = [];
+  private readonly eyes: EnemyEyes;
+  /** Only for an enemy whose def has a fury phase. */
+  private readonly fury?: EnemyFury;
   /** Same texture, filled with `def.outline` and a little bigger, just behind the body. */
-  private outline?: Phaser.GameObjects.Image;
+  private outline?: EnemyOutline;
 
   /** `def` already scaled for the floor. `wobbleSeed` offsets the chase wobble so a pack doesn't move in lockstep; pass it from the seeded Rng. */
   constructor(scene: Phaser.Scene, clock: GameClock, x: number, y: number, def: EnemyDef, wobbleSeed = 0) {
@@ -131,6 +111,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.clock = clock;
     this.wobbleSeed = wobbleSeed;
     this.hp = def.hp;
+    this.eyes = new EnemyEyes(this, def.scale);
+    if (def.fury) this.fury = new EnemyFury(this, def.fury, this.eyes);
     const spawnMs = def.spawnMs ?? SPAWN_MS;
     this.activeAt = clock.now + spawnMs;
     this.explodeAttack = findAttack(def, 'explode');
@@ -141,14 +123,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.summonAttack = findAttack(def, 'summon');
     if (this.summonAttack) this.nextSummonAt = this.activeAt + this.summonAttack.everyMs;
     this.setDepth(5).setScale(def.scale, 0.1).setAlpha(0);
-    if (def.outline !== undefined) {
-      this.outline = scene.add
-        .image(x, y, def.texture)
-        .setTintMode(Phaser.TintModes.FILL)
-        .setTint(def.outline)
-        .setDepth(this.depth - 0.1);
-      this.syncOutline();
-    }
+    if (def.outline !== undefined) this.outline = new EnemyOutline(this, def.outline);
     scene.tweens.add({ targets: this, scaleY: def.scale, alpha: 1, duration: spawnMs, ease: 'Back.Out' });
     const walk = walkAnimKey(def.texture);
     if (scene.anims.exists(walk)) this.play({ key: walk, startFrame: Math.floor(wobbleSeed) % 4 });
@@ -175,14 +150,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   /** A furious dash hits harder than touching the body. */
   get contactDamage(): number {
-    if (this.def.fury && this.clock.now < this.furyDashUntil) return this.def.fury.dash.damage;
+    if (this.def.fury && this.fury?.dashing(this.clock.now)) return this.def.fury.dash.damage;
     return this.def.contactDamage;
-  }
-
-  /** Stands still through the fury transition, then lets the fury loose. */
-  private holdForFury(time: number) {
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    if (time >= this.furyReadyAt) this.beginFury(time);
   }
 
   /** Updates pursuit using game-clock time, yielding movement to spawning, knockback and attack phases. */
@@ -196,23 +165,27 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.updateBurst(target, time);
     if (this.updateExplode(target, time)) return;
 
-    if (this.furyState === 'transition') {
-      this.holdForFury(time);
+    if (this.fury?.state === 'transition') {
+      this.fury.hold(time);
       return;
     }
     if (time < this.knockedUntil) return;
-    if (this.furyState === 'fury' && this.updateFuryDash(target, time)) return;
-    if (this.furyState === 'calm' && this.updateVolley(target, time)) return;
-    if (this.furyState === 'calm' && this.updateSummon(time)) return;
-    if (this.furyState === 'calm' && this.updateDash(target, time)) return;
+    if (this.attack(target, time)) return;
     this.updateBlink(target, time);
     this.walk(target, time);
   }
 
+  /** Returns true while an attack owns movement: the fury's dashes, or else the first calm attack under way. */
+  private attack(target: Phaser.GameObjects.Components.Transform, time: number): boolean {
+    if (this.fury?.state === 'fury') return this.fury.update(target, time);
+    return this.updateVolley(target, time) || this.updateSummon(time) || this.updateDash(target, time);
+  }
+
   private walk(target: Phaser.GameObjects.Components.Transform, time: number) {
     const body = this.body as Phaser.Physics.Arcade.Body;
-    const speed = this.def.speed * this.speedScale;
     const goal = this.steer?.(this, target) ?? target;
+    // Steered to its own spot: the way ahead is taken, so it waits its turn.
+    const speed = goal.x === this.x && goal.y === this.y ? 0 : this.def.speed * this.speedScale;
     if (this.def.axisWalk) {
       const axis = dominantAxis(goal.x - this.x, goal.y - this.y);
       body.setVelocity(axis.x * speed, axis.y * speed);
@@ -309,7 +282,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   /** Stands with glowing eyes until the orbs fly. */
   private holdVolley(volley: VolleyAttack, target: Phaser.GameObjects.Components.Transform, time: number): boolean {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.placeEyes();
+    this.eyes.place();
     if (time < this.volleyFireAt) return true;
     this.fireVolley(volley, target);
     return true;
@@ -320,7 +293,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.volleyFireAt = time + volley.telegraphMs;
     this.nextDashAt = Math.max(this.nextDashAt, this.volleyFireAt + VOLLEY_DASH_GAP_MS);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.showEyes(true);
+    this.eyes.show(true);
   }
 
   /**
@@ -380,7 +353,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.volleyFireAt = Infinity;
     this.nextVolleyAt = this.clock.now + volley.cooldownMs;
     this.rangeTrigger?.reset();
-    this.showEyes(false);
+    this.eyes.show(false);
     this.shootFan(volley, target);
     this.shotsLeft = (volley.shots ?? 1) - 1;
     this.nextShotAt = this.shotsLeft > 0 ? this.clock.now + (volley.shotGapMs ?? 0) : Infinity;
@@ -458,16 +431,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
    * drives it into a wall, it takes `slamShare` of the damage again (see `slammed`).
    */
   hit(damage: number, fromX: number, fromY: number, knockback = 1, slamShare = 0): boolean {
-    if (this.furyState === 'transition') return false;
+    if (this.fury?.state === 'transition') return false;
     const before = this.hp;
     this.hp -= damage;
     if (this.hp > 0 && crossesFury(this.def, before, this.hp)) this.startFury();
     this.setTintMode(Phaser.TintModes.FILL).setTint(0xffffff);
     this.scene.time.delayedCall(70, () => this.active && this.restoreTint());
-    if (knockback <= 0 || this.def.boss || this.def.miniBoss || this.def.anchored) return this.hp <= 0;
+    if (knockback <= 0 || !this.pushable) return this.hp <= 0;
     this.knockFrom(fromX, fromY, knockback);
     this.pendingSlam = damage * slamShare;
     return this.hp <= 0;
+  }
+
+  /** Bosses, mini bosses and rooted enemies hold their ground. */
+  private get pushable(): boolean {
+    return !this.def.boss && !this.def.miniBoss && !this.def.anchored;
   }
 
   /**
@@ -509,182 +487,42 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (crossesFury(this.def, before, this.hp)) this.startFury();
   }
 
+  /** Into fury: the transition starts, and any dash or volley under way is called off. */
+  private startFury() {
+    if (!this.fury?.start(this.clock.now)) return;
+    this.dashLaunchAt = Infinity;
+    this.dashingUntil = 0;
+    // No ranged attack in fury: a volley still glowing is called off.
+    this.volleyFireAt = Infinity;
+    this.eyes.show(false);
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.restoreTint();
+  }
+
   /** Restores the phase's body color after a hit flash so fury keeps its additive tint. */
   private restoreTint() {
-    if (this.furyState === 'calm') {
+    if (!this.fury || this.fury.state === 'calm') {
       this.setTintMode(Phaser.TintModes.MULTIPLY).clearTint();
       return;
     }
     this.setTintMode(Phaser.TintModes.ADD).setTint(this.def.fury!.tint);
   }
 
-  // ---------------------------------------------------------------- fury
-
-  /** Invulnerable transition: the normal dash is cancelled and the camera shakes. */
-  private startFury() {
-    if (this.furyState !== 'calm') return;
-    const fury = this.def.fury!;
-    this.furyState = 'transition';
-    this.furyReadyAt = this.clock.now + fury.transitionMs;
-    this.dashLaunchAt = Infinity;
-    this.dashingUntil = 0;
-    // No ranged attack in fury: a volley still glowing is called off.
-    this.volleyFireAt = Infinity;
-    this.showEyes(false);
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.scene.cameras.main.shake(fury.transitionMs, 0.01);
-    this.createFuryEffects();
-    this.restoreTint();
-  }
-
-  /** Ends the invulnerable transition and starts the aura, allowing a breather before the first dash. */
-  private beginFury(time: number) {
-    this.furyState = 'fury';
-    this.nextFuryDashAt = time + FURY_FIRST_DASH_MS;
-    this.aura?.start();
-  }
-
-  /** Prepares reusable fury visuals and inset room bounds for reflecting the enemy's center. */
-  private createFuryEffects() {
-    const scene = this.scene;
-    this.aura = scene.add
-      .particles(0, 0, 'particle', {
-        tint: 0xff4d4d,
-        blendMode: Phaser.BlendModes.ADD,
-        lifespan: 650,
-        speed: { min: 15, max: 50 },
-        scale: { start: 1.4, end: 0 },
-        alpha: { start: 0.9, end: 0 },
-        frequency: 50,
-        quantity: 2,
-        emitting: false,
-      })
-      .setDepth(4)
-      .startFollow(this);
-    this.dust = scene.add
-      .particles(0, 0, 'particle', {
-        tint: 0x8d84b8,
-        lifespan: 380,
-        speed: { min: 40, max: 120 },
-        scale: { start: 1.1, end: 0 },
-        alpha: { start: 0.7, end: 0 },
-        emitting: false,
-      })
-      .setDepth(6);
-    const r = (this.body as Phaser.Physics.Arcade.Body).halfWidth + 1;
-    this.furyBounds = {
-      minX: ROOM_X + TILE + r,
-      maxX: ROOM_X + ROOM_W - TILE - r,
-      minY: ROOM_Y + TILE + r,
-      maxY: ROOM_Y + ROOM_H - TILE - r,
-    };
-  }
-
-  /** Returns true while the dash owns movement. During the eye flash it keeps chasing. */
-  private updateFuryDash(target: Phaser.GameObjects.Components.Transform, time: number): boolean {
-    const dash = this.def.fury!.dash;
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    if (time < this.furyDashUntil) {
-      this.bounce(body);
-      body.setVelocity(this.furyVelocity.vx, this.furyVelocity.vy);
-      return true;
-    }
-    if (time >= this.furyLaunchAt) {
-      this.furyLaunchAt = Infinity;
-      this.furyDashUntil = time + (dash.distance / dash.speed) * 1000;
-      this.showEyes(false);
-      body.setVelocity(this.furyVelocity.vx, this.furyVelocity.vy);
-      return true;
-    }
-    if (this.furyLaunchAt !== Infinity) {
-      this.placeEyes();
-      return false;
-    }
-    if (time < this.nextFuryDashAt) return false;
-
-    this.nextFuryDashAt = time + dash.everyMs;
-    this.furyLaunchAt = time + dash.flashMs;
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-    this.furyVelocity.vx = Math.cos(angle) * dash.speed;
-    this.furyVelocity.vy = Math.sin(angle) * dash.speed;
-    this.showEyes(true);
-    return false;
-  }
-
-  /** The wall collider stops the body at the edge; the bounce reflects it from there. */
-  private bounce(body: Phaser.Physics.Arcade.Body) {
-    if (!ricochet(body.center.x, body.center.y, this.furyVelocity, this.furyBounds!)) return;
-    this.scene.cameras.main.shake(120, 0.006);
-    this.dust?.explode(10, body.center.x, body.center.y);
-  }
-
-  /** Toggles the eye glow that warns of a furious dash or a volley; made on first use. */
-  private showEyes(on: boolean) {
-    if (on && this.eyes.length === 0) {
-      this.eyes = EYE_OFFSETS.map(() =>
-        this.scene.add
-          .image(0, 0, 'particle')
-          .setBlendMode(Phaser.BlendModes.ADD)
-          .setScale(this.def.scale * EYE_GLOW_SCALE)
-          .setDepth(6)
-          .setVisible(false),
-      );
-    }
-    for (const eye of this.eyes) eye.setVisible(on);
-    if (on) this.placeEyes();
-  }
-
-  /** Keeps the warning sprites aligned with the scaled enemy while it chases during the flash. */
-  private placeEyes() {
-    for (let i = 0; i < this.eyes.length; i++) {
-      const offset = EYE_OFFSETS[i];
-      this.eyes[i].setPosition(this.x + offset.x * this.def.scale, this.y + offset.y * this.def.scale);
-    }
-  }
-
   die() {
-    const scene = this.scene;
-    const scale = this.def.scale;
-    for (let i = 0; i < 8 * scale; i++) {
-      const p = scene.add.image(this.x, this.y, 'particle').setTint(this.def.deathColor).setDepth(4);
-      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const d = 20 + Phaser.Math.FloatBetween(0, 30 * scale);
-      scene.tweens.add({
-        targets: p,
-        x: this.x + Math.cos(a) * d,
-        y: this.y + Math.sin(a) * d,
-        alpha: 0,
-        scale: 0.3,
-        duration: 380,
-        onComplete: () => p.destroy(),
-      });
-    }
+    deathBurst(this.scene, this.x, this.y, this.def.deathColor, this.def.scale);
     this.destroy();
   }
 
   /** Releases scene-owned fury effects with the enemy, including during scene teardown. */
   preUpdate(time: number, delta: number) {
     super.preUpdate(time, delta);
-    this.syncOutline();
-  }
-
-  /** Follows the body every frame, spawn rise and flips included. */
-  private syncOutline() {
-    const outline = this.outline;
-    if (!outline) return;
-    if (outline.frame.name !== this.frame.name) outline.setFrame(this.frame.name);
-    outline
-      .setPosition(this.x, this.y)
-      .setScale(this.scaleX * OUTLINE_SCALE, this.scaleY * OUTLINE_SCALE)
-      .setFlipX(this.flipX)
-      .setAlpha(this.alpha * 0.9);
+    this.outline?.sync();
   }
 
   destroy(fromScene?: boolean) {
     this.outline?.destroy();
-    this.aura?.destroy();
-    this.dust?.destroy();
-    for (const eye of this.eyes) eye.destroy();
+    this.fury?.destroy();
+    this.eyes.destroy();
     super.destroy(fromScene);
   }
 }

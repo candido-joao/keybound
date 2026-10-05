@@ -98,7 +98,7 @@ export const OBSTACLE_TUNING = {
 /** One cell per room tile, walls included, row by row; null is open floor. */
 export type ObstacleGrid = (ObstacleId | null)[];
 
-const CELLS = ROOM_COLS * ROOM_ROWS;
+export const CELLS = ROOM_COLS * ROOM_ROWS;
 
 export const cellIndex = (col: number, row: number) => row * ROOM_COLS + col;
 
@@ -332,59 +332,9 @@ export function allFloorReachable(grid: ObstacleGrid): boolean {
   return INTERIOR_CELLS.every((cell) => !clear(cellCol(cell), cellRow(cell)) || seen.has(cell));
 }
 
-/**
- * Steps to a target cell from every cell, by breadth-first search over what a walker (or a
- * flier) can cross. Built once per target cell into fixed arrays, so following it allocates nothing.
- */
-export class FlowField {
-  private readonly dist = new Int16Array(CELLS);
-  private readonly queue = new Int16Array(CELLS);
-
-  build(grid: ObstacleGrid, flying: boolean, targetCol: number, targetRow: number) {
-    this.dist.fill(-1);
-    if (!passable(grid, targetCol, targetRow, flying)) return;
-    let head = 0;
-    let tail = 0;
-    const start = cellIndex(targetCol, targetRow);
-    this.dist[start] = 0;
-    this.queue[tail++] = start;
-    while (head < tail) {
-      const cell = this.queue[head++];
-      const col = cell % ROOM_COLS;
-      const row = (cell - col) / ROOM_COLS;
-      const d = this.dist[cell] + 1;
-      tail = this.visit(grid, flying, col + 1, row, d, tail);
-      tail = this.visit(grid, flying, col - 1, row, d, tail);
-      tail = this.visit(grid, flying, col, row + 1, d, tail);
-      tail = this.visit(grid, flying, col, row - 1, d, tail);
-    }
-  }
-
-  private visit(grid: ObstacleGrid, flying: boolean, col: number, row: number, d: number, tail: number): number {
-    if (!passable(grid, col, row, flying)) return tail;
-    const cell = cellIndex(col, row);
-    if (this.dist[cell] >= 0) return tail;
-    this.dist[cell] = d;
-    this.queue[tail] = cell;
-    return tail + 1;
-  }
-
-  /** Steps to the target; -1 when it can't be reached or the cell is out of the room. */
-  distance(col: number, row: number): number {
-    if (col < 0 || row < 0 || col >= ROOM_COLS || row >= ROOM_ROWS) return -1;
-    return this.dist[cellIndex(col, row)];
-  }
-
-  /** The neighbor one step closer to the target, as a cell index; -1 when there is none. */
-  next(col: number, row: number): number {
-    const here = this.distance(col, row);
-    if (here <= 0) return -1;
-    if (this.distance(col + 1, row) === here - 1) return cellIndex(col + 1, row);
-    if (this.distance(col - 1, row) === here - 1) return cellIndex(col - 1, row);
-    if (this.distance(col, row + 1) === here - 1) return cellIndex(col, row + 1);
-    if (this.distance(col, row - 1) === here - 1) return cellIndex(col, row - 1);
-    return -1;
-  }
+export interface Spot {
+  x: number;
+  y: number;
 }
 
 /** Sample spacing along a line of sight; well under a tile, so no corner is skipped. */
@@ -397,14 +347,14 @@ const SIGHT_STEP = TILE / 4;
 export function straightPath(
   grid: ObstacleGrid,
   flying: boolean,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
+  from: Readonly<Spot>,
+  to: Readonly<Spot>,
   radius: number,
 ): boolean {
-  const dx = x1 - x0;
-  const dy = y1 - y0;
+  const x0 = from.x;
+  const y0 = from.y;
+  const dx = to.x - x0;
+  const dy = to.y - y0;
   const length = Math.hypot(dx, dy);
   if (length === 0) return true;
   const nx = (-dy / length) * radius;

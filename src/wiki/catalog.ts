@@ -1,5 +1,5 @@
 import { POOL_DEPTH } from '../combat/balance';
-import { ENEMIES, type EnemyAttack, type EnemyDef } from '../combat/enemies';
+import { ENEMIES, type EnemyAttack, type EnemyDef, type VolleyAttack } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { type Item, type ItemPool, baseId } from '../combat/stats';
 import { SHOP } from '../combat/shop';
@@ -96,7 +96,12 @@ export function enemyById(id: string): EnemyDef | undefined {
 
 /** What an enemy does, attacks first, then how it moves and dies. */
 export function enemyLines(def: EnemyDef): Line[] {
-  const lines = def.attacks.map(attackLine);
+  return [...def.attacks.map(attackLine), ...bossLines(def), ...movementLines(def), ...splitLines(def)];
+}
+
+/** Builds translatable boss, fury and revival traits, converting health shares and delays for display. */
+function bossLines(def: EnemyDef): Line[] {
+  const lines: Line[] = [];
   if (def.boss) lines.push({ key: 'wiki.trait.boss' });
   if (def.fury) {
     lines.push({ key: 'wiki.trait.fury', params: { pct: pct(def.fury.hpShare), damage: def.fury.dash.damage } });
@@ -104,17 +109,29 @@ export function enemyLines(def: EnemyDef): Line[] {
   if (def.revive) {
     lines.push({ key: 'wiki.trait.revive', params: { s: seconds(def.revive.delayMs), pct: pct(def.revive.hpShare) } });
   }
-  if (def.fade) lines.push({ key: 'wiki.trait.fade' });
-  if (def.blink) lines.push({ key: 'wiki.trait.blink' });
-  if (def.anchored) lines.push({ key: 'wiki.trait.anchored' });
-  if (def.axisWalk) lines.push({ key: 'wiki.trait.axis-walk' });
-  if (def.ghost) lines.push({ key: 'wiki.trait.ghost' });
-  if (def.flies) lines.push({ key: 'wiki.trait.flies' });
-  const child = def.split && enemyById(def.split.id);
-  if (def.split && child) {
-    lines.push({ key: 'wiki.trait.split', params: { count: def.split.count, name: { key: child.name } } });
-  }
   return lines;
+}
+
+/** Traits that only need saying, in the order the wiki lists them. */
+const MOVEMENT_TRAITS = [
+  ['fade', 'wiki.trait.fade'],
+  ['blink', 'wiki.trait.blink'],
+  ['anchored', 'wiki.trait.anchored'],
+  ['axisWalk', 'wiki.trait.axis-walk'],
+  ['ghost', 'wiki.trait.ghost'],
+  ['flies', 'wiki.trait.flies'],
+] as const satisfies readonly (readonly [keyof EnemyDef, MessageKey])[];
+
+/** Lists enabled movement traits in the fixed display order shared by all enemy entries. */
+function movementLines(def: EnemyDef): Line[] {
+  return MOVEMENT_TRAITS.filter(([trait]) => def[trait]).map(([, key]) => ({ key }));
+}
+
+/** Describes split offspring by count and translated name, omitting missing child definitions. */
+function splitLines(def: EnemyDef): Line[] {
+  const child = def.split && enemyById(def.split.id);
+  if (!def.split || !child) return [];
+  return [{ key: 'wiki.trait.split', params: { count: def.split.count, name: { key: child.name } } }];
 }
 
 /** Describe a split child using its parent’s translatable name. */
@@ -134,6 +151,11 @@ export function attackLine(attack: EnemyAttack): Line {
     return { key: 'wiki.attack.summon', params: { min: attack.min, max: attack.max, name } };
   }
   if (attack.kind === 'explode') return { key: 'wiki.attack.explode', params: { damage: attack.damage } };
+  return volleyLine(attack);
+}
+
+/** Chooses a burst, single shot, ring or fan description, giving repeated bursts precedence. */
+function volleyLine(attack: VolleyAttack): Line {
   const { count, damage } = attack;
   if ((attack.shots ?? 1) > 1) return { key: 'wiki.attack.volley.burst', params: { shots: attack.shots!, damage } };
   if (count === 1) return { key: 'wiki.attack.volley.single', params: { damage } };

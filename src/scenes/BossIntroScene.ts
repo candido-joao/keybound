@@ -46,17 +46,7 @@ export class BossIntroScene extends Phaser.Scene {
     camera.pan(data.x, data.y, FOCUS_MS, CAMERA_EASE);
     camera.zoomTo(ZOOM, FOCUS_MS, CAMERA_EASE);
 
-    const name = this.add
-      .text(GAME_W / 2, GAME_H - BAR_H / 2, t(data.name), {
-        fontFamily: 'monospace',
-        fontSize: '30px',
-        color: COLORS.text,
-        stroke: '#000',
-        strokeThickness: 6,
-      })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setScale(1.4);
+    const name = this.addName(data.name);
     this.time.delayedCall(NAME_AT, () =>
       this.tweens.add({ targets: name, alpha: 1, scale: 1, duration: 300, ease: 'Back.Out' }),
     );
@@ -71,6 +61,27 @@ export class BossIntroScene extends Phaser.Scene {
     });
     this.time.delayedCall(END_AT, () => this.finish());
 
+    this.addSkipHint();
+    this.input.keyboard!.once('keydown-ENTER', () => this.finish());
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onTouch(p));
+  }
+
+  /** Hidden and oversized; the intro brings it in once the camera arrives. */
+  private addName(key: BossIntroData['name']): Phaser.GameObjects.Text {
+    return this.add
+      .text(GAME_W / 2, GAME_H - BAR_H / 2, t(key), {
+        fontFamily: 'monospace',
+        fontSize: '30px',
+        color: COLORS.text,
+        stroke: '#000',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setScale(1.4);
+  }
+
+  private addSkipHint() {
     this.add
       .text(GAME_W - 16, GAME_H - 12, t(hintKey('boss-intro.skip')), {
         fontFamily: 'monospace',
@@ -78,8 +89,6 @@ export class BossIntroScene extends Phaser.Scene {
         color: COLORS.textMuted,
       })
       .setOrigin(1, 1);
-    this.input.keyboard!.once('keydown-ENTER', () => this.finish());
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onTouch(p));
   }
 
   /** A new touch on the room skips; a thumb only lifting off a stick at the sides doesn't. */

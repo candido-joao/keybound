@@ -85,10 +85,8 @@ export const es = {
   'summary.rooms': 'Salas {n}',
   'summary.no-items': 'Ningún objeto',
   'summary.seeded': 'semilla fija',
-  'summary.new-run': 'Enter nueva partida',
+  'summary.new-run': 'R nueva partida',
   'summary.new-run-touch': 'Nueva partida',
-  'summary.same-seed': 'R repetir semilla',
-  'summary.same-seed-touch': 'Repetir semilla',
   'summary.menu': 'Esc menú',
   'summary.menu-touch': 'Menú',
 

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { parseConsoleParam, parseSettings } from './settings';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { loadSettings, parseConsoleParam, parseSettings, saveSettings } from './settings';
 
 describe('parseSettings', () => {
   it('reads the console flag', () => {
@@ -40,5 +40,41 @@ describe('parseConsoleParam', () => {
     ['?seed=ABC', undefined],
   ])('%s -> %s', (search, expected) => {
     expect(parseConsoleParam(search)).toBe(expected);
+  });
+});
+
+describe('loadSettings', () => {
+  const DEFAULTS = { locale: null, console: false, stickMode: 'floating' };
+  const storage = (raw: string | null) => ({ getItem: () => raw, setItem: vi.fn() });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads back what was saved', () => {
+    const saved = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => saved.get(key) ?? null,
+      setItem: (key: string, value: string) => saved.set(key, value),
+    });
+    saveSettings({ locale: 'es', console: true, stickMode: 'fixed' });
+    expect(loadSettings()).toEqual({ locale: 'es', console: true, stickMode: 'fixed' });
+  });
+
+  it.each([
+    ['nothing saved', null],
+    ['broken JSON', '{nope'],
+    ['another version', JSON.stringify({ version: 99, console: true })],
+    ['not an object', '42'],
+  ])('falls back to the defaults on %s', (_, raw) => {
+    vi.stubGlobal('localStorage', storage(raw));
+    expect(loadSettings()).toEqual(DEFAULTS);
+  });
+
+  it('falls back to the defaults when storage is blocked, and saving does not throw', () => {
+    const blocked = () => {
+      throw new Error('blocked');
+    };
+    vi.stubGlobal('localStorage', { getItem: blocked, setItem: blocked });
+    expect(loadSettings()).toEqual(DEFAULTS);
+    expect(() => saveSettings(DEFAULTS as never)).not.toThrow();
   });
 });

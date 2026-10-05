@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { STAT_LIMITS } from '../combat/balance';
 import {
   BEAM,
+  type BeamRay,
   type Bounds,
   beamDurationMs,
   beamLength,
@@ -78,6 +79,15 @@ export class BeamWeapon {
   private firstTick = true;
   /** Refilled each frame; `aimAt` bends the beam toward the nearest of them. */
   private readonly targets: Enemy[] = [];
+  /** Reused for every path traced, so tracing allocates nothing. */
+  private readonly ray: BeamRay = { x: 0, y: 0, angle: 0, length: 0, turnPerPx: 0 };
+  /** Set each frame by `tracePaths`, for every path traced and every tick that frame. */
+  private length = 0;
+  private turn = 0;
+  private beamWidth = 0;
+  /** Set by `tick` for the hits it deals. */
+  private tickDamage = 0;
+  private tickKnockback = 0;
 
   constructor(scene: Phaser.Scene, host: StrikeHost, chain: ChainShock) {
     this.host = host;
@@ -124,88 +134,76 @@ export class BeamWeapon {
    */
   private tracePaths(player: Player) {
     const s = player.stats;
-    const aim = player.aimAngle;
-    const length = beamLength(s, this.continuous);
-    const turn = s.homing / HOMING_PX_PER_SECOND;
-    const width = this.width(s);
+    this.length = beamLength(s, this.continuous);
+    this.turn = s.homing / HOMING_PX_PER_SECOND;
+    this.beamWidth = this.width(s);
     this.pathCount = 0;
     this.groupCount = 1 + s.echoShots;
-    for (let d = 0; d <= s.echoShots; d++) {
-      const offset = directionOffset(d);
-      const center = aim + offset;
-      // Only the backward echo runs along the key: cos(offset) is -1 there and 0 to the sides.
-      const reach = Math.max(0, -Math.cos(offset)) * player.keyHandleReach;
-      const x = d === 0 ? player.keyTipX : player.keyGripX + Math.cos(center) * reach;
-      const y = d === 0 ? player.keyTipY : player.keyGripY + Math.sin(center) * reach;
-      const share = d === 0 ? 1 : s.echoDamage;
-      const count = shotsInDirection(d, s.shotCount, s.echoShots);
-      this.traceFan(s, x, y, center, count, length, turn, share, d, width);
-    }
+    for (let d = 0; d <= s.echoShots; d++) this.traceDirection(player, d);
   }
 
-  /** Traces every beam of one directional fan, refracting each that lands and allows it. */
-  private traceFan(
-    s: PlayerStats,
-    x: number,
-    y: number,
-    center: number,
-    count: number,
-    length: number,
-    turn: number,
-    share: number,
-    group: number,
-    width: number,
-  ) {
+  /** Direction `d`'s fan: the aim for 0, an echo after. */
+  private traceDirection(player: Player, d: number) {
+    const s = player.stats;
+    const offset = directionOffset(d);
+    const center = player.aimAngle + offset;
+    // Only the backward echo runs along the key: cos(offset) is -1 there and 0 to the sides.
+    const reach = Math.max(0, -Math.cos(offset)) * player.keyHandleReach;
+    const x = d === 0 ? player.keyTipX : player.keyGripX + Math.cos(center) * reach;
+    const y = d === 0 ? player.keyTipY : player.keyGripY + Math.sin(center) * reach;
+    const count = shotsInDirection(d, s.shotCount, s.echoShots);
     for (let i = 0; i < count; i++) {
-      const p = this.tracePath(x, y, fanAngle(center, i, count, s.spread), length, turn, share, 1, group, null);
-      if (p >= 0 && s.refract > 0) this.refract(p, length, turn, width);
+      const p = this.tracePath(x, y, fanAngle(center, i, count, s.spread), this.length, d);
+      if (p < 0) continue;
+      this.shares[p] = d === 0 ? 1 : s.echoDamage;
+      if (s.refract > 0) this.refract(p);
     }
   }
 
-  private tracePath(
-    x: number,
-    y: number,
-    angle: number,
-    length: number,
-    turn: number,
-    share: number,
-    width: number,
-    group: number,
-    skip: Enemy | null,
-  ): number {
+  /** Traces a full-width path that skips no one; returns its index, or -1 when there's no room for it. */
+  private tracePath(x: number, y: number, angle: number, length: number, group: number): number {
     // The console can push shot counts past their limits; extra beams are dropped, never thrown.
     if (this.pathCount >= MAX_PATHS || group >= MAX_GROUPS) return -1;
     const p = this.pathCount++;
-    this.pointCounts[p] = traceBeam(this.paths[p], x, y, angle, length, turn, ROOM_INSIDE, this.aimAt);
-    this.shares[p] = share;
-    this.widths[p] = width;
+    const ray = this.ray;
+    ray.x = x;
+    ray.y = y;
+    ray.angle = angle;
+    ray.length = length;
+    ray.turnPerPx = this.turn;
+    this.pointCounts[p] = traceBeam(this.paths[p], ray, ROOM_INSIDE, this.aimAt);
+    this.shares[p] = 1;
+    this.widths[p] = 1;
     this.groups[p] = group;
-    this.skips[p] = skip;
+    this.skips[p] = null;
     return p;
   }
 
   /** Splits path `p` in two at the first enemy it touches, the halves carrying on for what reach is left. */
-  private refract(p: number, length: number, turn: number, width: number) {
+  private refract(p: number) {
     const path = this.paths[p];
     const x0 = path[0];
     const y0 = path[1];
     let first: Enemy | null = null;
     let firstD2 = Infinity;
     for (const enemy of this.targets) {
-      const radius = width / 2 + ENEMY_RADIUS * enemy.def.scale;
+      const radius = this.beamWidth / 2 + ENEMY_RADIUS * enemy.def.scale;
       if (!pathTouches(path, this.pointCounts[p], enemy.x, enemy.y, radius)) continue;
       const d2 = (enemy.x - x0) ** 2 + (enemy.y - y0) ** 2;
       if (d2 >= firstD2) continue;
       first = enemy;
       firstD2 = d2;
     }
-    const left = length - Math.sqrt(firstD2);
+    const left = this.length - Math.sqrt(firstD2);
     if (!first || left <= 0) return;
     const heading = Math.atan2(first.y - y0, first.x - x0);
     const share = this.shares[p] * BEAM.refractShare;
     for (let side = -1; side <= 1; side += 2) {
-      const angle = heading + side * REFRACT_RAD;
-      this.tracePath(first.x, first.y, angle, left, turn, share, BEAM.refractWidth, this.groupCount++, first);
+      const q = this.tracePath(first.x, first.y, heading + side * REFRACT_RAD, left, this.groupCount++);
+      if (q < 0) continue;
+      this.shares[q] = share;
+      this.widths[q] = BEAM.refractWidth;
+      this.skips[q] = first;
     }
   }
 
@@ -230,45 +228,35 @@ export class BeamWeapon {
    */
   private tick(player: Player, now: number) {
     const s = player.stats;
-    const damage = beamTickDamage(s, this.power, this.continuous);
-    const width = this.width(s);
+    this.tickDamage = beamTickDamage(s, this.power, this.continuous);
     // A held beam pushing every tick would pin enemies out of reach for free.
-    const knockback = this.continuous ? 0 : s.knockback * BEAM.tickKnockback;
+    this.tickKnockback = this.continuous ? 0 : s.knockback * BEAM.tickKnockback;
     this.groupStamps.fill(-1);
     for (let e = 0; e < this.targets.length; e++) {
       const enemy = this.targets[e];
-      const body = ENEMY_RADIUS * enemy.def.scale;
-      const keyReach = width / 2 + body;
+      const keyReach = this.beamWidth / 2 + ENEMY_RADIUS * enemy.def.scale;
       const onKey =
         segmentDistanceSq(enemy.x, enemy.y, player.keyGripX, player.keyGripY, player.keyTipX, player.keyTipY) <=
         keyReach * keyReach;
-      this.hitAlongPaths(player, e, onKey, width, damage, knockback, now);
+      this.hitAlongPaths(player, e, onKey, now);
     }
     this.nextTickAt += BEAM.tickMs;
     this.firstTick = false;
   }
 
   /** Strikes target `e` once for each beam group whose path touches it. */
-  private hitAlongPaths(
-    player: Player,
-    e: number,
-    onKey: boolean,
-    width: number,
-    damage: number,
-    knockback: number,
-    now: number,
-  ) {
+  private hitAlongPaths(player: Player, e: number, onKey: boolean, now: number) {
     const enemy = this.targets[e];
     const body = ENEMY_RADIUS * enemy.def.scale;
     for (let p = 0; p < this.pathCount; p++) {
       const group = this.groups[p];
       if (!enemy.active || this.groupStamps[group] === e || this.skips[p] === enemy) continue;
-      const radius = (width * this.widths[p]) / 2 + body;
+      const radius = (this.beamWidth * this.widths[p]) / 2 + body;
       const touches =
         (group === 0 && onKey) || pathTouches(this.paths[p], this.pointCounts[p], enemy.x, enemy.y, radius);
       if (!touches) continue;
       this.groupStamps[group] = e;
-      this.strike(player, enemy, damage * this.shares[p], knockback, now);
+      this.strike(player, enemy, this.tickDamage * this.shares[p], this.tickKnockback, now);
     }
   }
 
