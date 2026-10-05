@@ -30,5 +30,6 @@
   - `pnpm format:check`: Prettier. `pnpm format` corrige.
   - `pnpm test`: vitest, para a lógica pura (`*.test.ts` ao lado do arquivo testado).
   - `pnpm build`: `tsc` e `vite build`.
+- `pnpm perf`: teste de estresse num Chromium headless (Edge ou Chrome; `PERF_BROWSER` aponta outro). Sala cheia e tiro contínuo; falha acima do orçamento de script por frame, crescimento de heap e tamanho do pool. Rode em mudanças no loop de update, na física, nos projéteis ou no HUD. Fica fora do CI por depender de navegador.
 - O CI (`.github/workflows/ci.yml`) roda essas quatro checagens em PRs para `development` e `main` e em push na `development`.
 - PRs com commit só de formatação: registre o hash que chega na `development` em `.git-blame-ignore-revs`. Com squash, é o hash do squash.

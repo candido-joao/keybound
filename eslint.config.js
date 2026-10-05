@@ -55,6 +55,10 @@ export default defineConfig(
     },
   },
   {
+    files: ['scripts/**'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ['src/core/rng.ts'],
     rules: {
       // randomSeed() picks the seed itself; everything downstream is deterministic.

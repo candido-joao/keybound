@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { addItemIcon } from '../combat/items';
 import { type Item, countItems } from '../combat/stats';
 import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_H, ROOM_W, ROOM_X, ROOM_Y } from '../config';
-import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
+import { DIRS, type Dir, type RoomNode, type RoomType } from '../floor/FloorGenerator';
 import { phaseAt } from '../floor/phases';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { pad } from '../input/touch';
@@ -104,7 +104,12 @@ export class HudScene extends Phaser.Scene {
   private drawnHealth = -1;
   private drawnMaxHealth = -1;
   private icons: Phaser.GameObjects.GameObject[] = [];
-  private iconsKey = '';
+  /** The list and its size when last drawn: items are only ever added or removed one at a time. */
+  private drawnItems: readonly Item[] | null = null;
+  private drawnItemCount = -1;
+  private drawnMapRoom: RoomNode | null = null;
+  private drawnMapExpanded = false;
+  private drawnMapRevealed = false;
   private bossBar!: Phaser.GameObjects.Graphics;
   private bossName!: Phaser.GameObjects.Text;
   private bossTrail = new HealthTrail();
@@ -130,7 +135,8 @@ export class HudScene extends Phaser.Scene {
     // Above the HP bar and icons, so the expanded map's backdrop dims them too.
     this.map = this.add.graphics().setDepth(10);
     this.icons = [];
-    this.iconsKey = '';
+    this.drawnItems = null;
+    this.drawnMapRoom = null;
     this.labelDepth = 0;
     this.labelLocale = null;
     this.createCurrency();
@@ -369,7 +375,16 @@ export class HudScene extends Phaser.Scene {
     ctx.stroke();
   }
 
+  /** Only rooms visited or revealed change it, and a room is visited by walking into it. */
   private drawMinimap(game: GameScene, layout: MapLayout, expanded: boolean) {
+    const unchanged =
+      game.room === this.drawnMapRoom &&
+      expanded === this.drawnMapExpanded &&
+      game.mapRevealed === this.drawnMapRevealed;
+    if (unchanged) return;
+    this.drawnMapRoom = game.room;
+    this.drawnMapExpanded = expanded;
+    this.drawnMapRevealed = game.mapRevealed;
     const { cellW, cellH } = layout;
     const g = this.map.clear();
     if (expanded) g.fillStyle(0x000000, 0.5).fillRect(0, 0, GAME_W, GAME_H);
@@ -404,9 +419,9 @@ export class HudScene extends Phaser.Scene {
 
   /** One faded icon per distinct item; rebuilt only when the inventory changes. */
   private drawItemIcons(items: readonly Item[]) {
-    const key = items.map((i) => i.id).join(',');
-    if (key === this.iconsKey) return;
-    this.iconsKey = key;
+    if (items === this.drawnItems && items.length === this.drawnItemCount) return;
+    this.drawnItems = items;
+    this.drawnItemCount = items.length;
     this.icons.forEach((o) => o.destroy());
     this.icons = [];
 

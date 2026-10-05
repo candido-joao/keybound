@@ -87,6 +87,8 @@ const SUMMON_RING = TILE * 1.4;
 
 /** Enough for a few volleys at once; a full pool skips the shot. */
 const ORB_POOL_SIZE = 40;
+/** Far above what fire rate, extra shots and range keep in the air at once. */
+const BOLT_POOL_SIZE = 160;
 
 /** Drops lie where they fell until the player walks over them. */
 const DROP_PICKUP_RADIUS = 20;
@@ -296,7 +298,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.doorBlocks = this.physics.add.staticGroup();
     this.obstacles = new RoomObstacles(this);
     this.enemies = this.physics.add.group();
-    this.bolts = this.physics.add.group();
+    this.bolts = this.physics.add.group({ classType: Bolt, maxSize: BOLT_POOL_SIZE });
     this.orbs = this.physics.add.group({ classType: HostileOrb, maxSize: ORB_POOL_SIZE });
 
     const stats = this.currentStats();
@@ -363,7 +365,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     p.add.overlap(this.bolts, this.enemies, (b, e) => {
       const bolt = b as Bolt;
       const enemy = e as Enemy;
-      if (!bolt.active || !enemy.active || !enemy.hittable) return;
+      if (!bolt.flying || !enemy.active || !enemy.hittable) return;
       // Read before striking: a bolt that can't pierce any further is gone after it.
       const { x, y, damage } = bolt;
       if (!bolt.strike(enemy)) return;
@@ -405,11 +407,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.player.move();
     if (this.player.wantsSwing()) this.swing();
     const shot = this.player.tryShoot(time);
-    for (const spec of shot.bolts) {
-      const bolt = new Bolt(this, spec);
-      this.bolts.add(bolt);
-      bolt.launch(spec);
-    }
+    for (const spec of shot.bolts) (this.bolts.get(spec.x, spec.y) as Bolt | null)?.launch(spec);
     if (shot.beam) this.beamWeapon.fire(shot.beam, this.player.stats, time);
 
     const feet = (this.player.body as Phaser.Physics.Arcade.Body).center;
@@ -423,13 +421,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.updateBossHealth(enemies);
 
     const dt = delta / 1000;
-    for (const bolt of [...this.bolts.getChildren()] as Bolt[]) {
-      if (bolt.expired()) {
-        bolt.burst();
-        continue;
-      }
-      if (bolt.homing > 0) bolt.steerToward(this.homingTarget(bolt, enemies), dt);
-    }
+    for (const bolt of this.bolts.getChildren() as Bolt[]) this.updateBolt(bolt, enemies, delta);
 
     this.updatePiles(time);
     this.updateDrops(dt);
@@ -460,6 +452,16 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   /** Nearest enemy the bolt hasn't gone through yet; a piercing bolt would otherwise circle the one it just hit. */
+  private updateBolt(bolt: Bolt, enemies: readonly Enemy[], delta: number) {
+    bolt.fade(delta);
+    if (!bolt.flying) return;
+    if (bolt.expired()) {
+      bolt.burst();
+      return;
+    }
+    if (bolt.homing > 0) bolt.steerToward(this.homingTarget(bolt, enemies), delta / 1000);
+  }
+
   private homingTarget(bolt: Bolt, targets: readonly Enemy[]): Enemy | undefined {
     let best: Enemy | undefined;
     let bestD2 = Infinity;
@@ -491,7 +493,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.doorBlockAt.clear();
     this.openDoors.clear();
     this.enemies.clear(true, true);
-    this.bolts.clear(true, true);
+    for (const bolt of this.bolts.getChildren() as Bolt[]) bolt.free();
     for (const orb of this.orbs.getChildren() as HostileOrb[]) orb.release();
     this.beamWeapon.stop();
     this.chainShock.clear();

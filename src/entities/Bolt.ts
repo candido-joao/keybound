@@ -16,6 +16,14 @@ export interface BoltSpec {
   inheritVy: number;
 }
 
+/** How long the burst puff takes to grow and fade. */
+const BURST_MS = 160;
+const BURST_GROWTH = 2.2;
+
+/**
+ * Player projectile. Pooled by GameScene: `launch` takes one out; a burst turns it into its own
+ * fading puff, and once that ends it waits, inactive, for the next shot.
+ */
 export class Bolt extends Phaser.Physics.Arcade.Image {
   damage = 0;
   homing = 0;
@@ -26,14 +34,25 @@ export class Bolt extends Phaser.Physics.Arcade.Image {
   private startX = 0;
   private startY = 0;
   private speed = 0;
+  private baseScale = 1;
+  /** Time left on the burst puff; 0 while flying. */
+  private burstLeft = 0;
 
-  constructor(scene: Phaser.Scene, spec: BoltSpec) {
-    super(scene, spec.x, spec.y, 'bolt');
-    scene.add.existing(this);
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    super(scene, x, y, 'bolt');
   }
 
-  /** Call after the bolt joins its physics group; group.add resets body velocity. */
+  /** Flying, not yet burst: the only state that hits, homes or expires. */
+  get flying(): boolean {
+    return this.active && this.burstLeft <= 0;
+  }
+
   launch(spec: BoltSpec) {
+    this.enableBody(true, spec.x, spec.y, true, true);
+    this.setAlpha(1);
+    this.burstLeft = 0;
+    this.struck.length = 0;
+    this.baseScale = spec.scale;
     this.damage = spec.damage;
     this.homing = spec.homing;
     this.pierceLeft = spec.pierce;
@@ -85,15 +104,27 @@ export class Bolt extends Phaser.Physics.Arcade.Image {
     return Phaser.Math.Distance.Between(this.startX, this.startY, this.x, this.y) > this.range;
   }
 
+  /** Stops it where it is; from here it only grows and fades as the puff. */
   burst() {
-    const puff = this.scene.add.image(this.x, this.y, 'bolt').setBlendMode(Phaser.BlendModes.ADD).setScale(this.scale);
-    this.scene.tweens.add({
-      targets: puff,
-      scale: this.scale * 2.2,
-      alpha: 0,
-      duration: 160,
-      onComplete: () => puff.destroy(),
-    });
-    this.destroy();
+    if (!this.flying) return;
+    this.disableBody(false, false);
+    this.burstLeft = BURST_MS;
+  }
+
+  /** Advances the puff; frees the bolt for the pool once it's gone. */
+  fade(deltaMs: number) {
+    if (this.burstLeft <= 0) return;
+    this.burstLeft -= deltaMs;
+    if (this.burstLeft <= 0) {
+      this.free();
+      return;
+    }
+    const share = 1 - this.burstLeft / BURST_MS;
+    this.setScale(this.baseScale * (1 + (BURST_GROWTH - 1) * share)).setAlpha(1 - share);
+  }
+
+  free() {
+    this.burstLeft = 0;
+    this.disableBody(true, true);
   }
 }

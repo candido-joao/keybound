@@ -57,6 +57,8 @@ export interface BeamTrigger {
 
 const NO_SHOT: ShotOutput = { bolts: [], beam: null };
 const CONTINUOUS_BEAM: BeamTrigger = { power: 1, continuous: true };
+// Shared: a held beam asks for this every frame.
+const CONTINUOUS_SHOT: ShotOutput = { bolts: [], beam: CONTINUOUS_BEAM };
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
@@ -166,7 +168,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
    * which reads the walk.
    */
   startSwing(): number {
-    const [sx, sy] = this.shootAxes();
+    const sx = this.shootX();
+    const sy = this.shootY();
     this.swingStartAt = this.clock.now;
     // The key stays where it swung: the swing becomes the aim until the next shot sets one.
     this.aim = swingDirection(sx, sy, this.moveX, this.moveY, axisAim(sx, sy) ?? this.aim);
@@ -174,22 +177,25 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   /** Arrow keys and the aim stick, each axis -1, 0 or 1. */
-  private shootAxes(): [number, number] {
-    const k = this.keys;
-    const sx = Math.sign((k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0) + pad.aimX);
-    const sy = Math.sign((k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0) + pad.aimY);
-    return [sx, sy];
+  private shootX(): number {
+    return Math.sign((this.keys.RIGHT.isDown ? 1 : 0) - (this.keys.LEFT.isDown ? 1 : 0) + pad.aimX);
+  }
+
+  private shootY(): number {
+    return Math.sign((this.keys.DOWN.isDown ? 1 : 0) - (this.keys.UP.isDown ? 1 : 0) + pad.aimY);
   }
 
   /** Arrow keys or the aim stick aim and fire. Returns what to spawn this frame. */
   tryShoot(time: number): ShotOutput {
-    const [sx, sy] = this.shootAxes();
+    const sx = this.shootX();
+    const sy = this.shootY();
     const firing = sx !== 0 || sy !== 0;
     this.aim = axisAim(sx, sy) ?? this.aim;
 
     const beam = this.stats.beam > 0 ? this.updateCharge(firing, time) : null;
     this.updateKeyWeapon();
     this.updateLook(firing);
+    if (beam === CONTINUOUS_BEAM) return CONTINUOUS_SHOT;
     if (this.stats.beam > 0) return beam ? { bolts: [], beam } : NO_SHOT;
     if (!firing || time < this.nextShotAt) return NO_SHOT;
     this.nextShotAt = time + this.stats.fireDelay;
