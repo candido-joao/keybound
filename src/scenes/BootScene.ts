@@ -13,6 +13,15 @@ import { ITEMS, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
 import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
+import {
+  PIT_PARTS,
+  PIT_PIECES,
+  type PitPiece,
+  obstacleArtFiles,
+  obstacleDef,
+  obstacleTexture,
+  pitFrame,
+} from '../floor/obstacles';
 import { PHASES, floorTexture, wallTexture } from '../floor/phases';
 import { HERO_PORTRAIT_ART, HERO_SHEET, KEY_ART, KEY_ICON_ART, KEY_TITLE_ART } from '../entities/Player';
 import { SWING_FX, SWING_FX_FRAME } from '../entities/keyArt';
@@ -40,6 +49,9 @@ const PORTRAIT_ART_EYES = { x: 80, y: 92 };
  * key, as item icons do (`item:<id>`); addItemIcon falls back to the baked orb.
  */
 export class BootScene extends Phaser.Scene {
+  /** Obstacle texture keys and their art files; a missing first look is baked, a missing variant falls back to it. */
+  private readonly obstacleArt = obstacleArtFiles(PHASES.map((p) => p.id));
+
   constructor() {
     super('boot');
   }
@@ -59,6 +71,7 @@ export class BootScene extends Phaser.Scene {
     const frame = { frameWidth: ENEMY_FRAME, frameHeight: ENEMY_FRAME };
     for (const def of ENEMIES) if (def.frames) this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, frame);
     this.load.spritesheet(BONE_PILE, `enemies/${BONE_PILE}.png`, frame);
+    for (const [key, file] of this.obstacleArt) this.load.image(key, file);
   }
 
   /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
@@ -77,6 +90,10 @@ export class BootScene extends Phaser.Scene {
       draw();
       g.generateTexture(key, w, h);
     };
+    // Obstacle art that loaded keeps its key; only the missing ones are drawn.
+    const bakeMissing = (key: string, w: number, h: number, draw: () => void) => {
+      if (!this.textures.exists(key)) bake(key, w, h, draw);
+    };
 
     for (const phase of PHASES) {
       const { floor, floorAlt, wall, wallEdge } = phase.palette;
@@ -90,7 +107,45 @@ export class BootScene extends Phaser.Scene {
         g.lineStyle(2, wallEdge).strokeRect(1, 1, TILE - 2, TILE - 2);
         g.fillStyle(wallEdge).fillRect(6, TILE / 2 - 1, TILE - 12, 2);
       });
+      const drawRock = () => {
+        g.fillStyle(0x000000, 0.35).fillEllipse(TILE / 2, TILE - 9, TILE - 10, 12);
+        g.fillStyle(wall).fillRoundedRect(5, 6, TILE - 10, TILE - 13, 10);
+        g.fillStyle(wallEdge).fillRoundedRect(10, 9, TILE - 24, 9, 4);
+        g.lineStyle(2, wallEdge).strokeRoundedRect(5, 6, TILE - 10, TILE - 13, 10);
+      };
+      bakeMissing(obstacleTexture(obstacleDef('rock'), phase.id), TILE, TILE, drawRock);
+      bakeMissing(obstacleTexture(obstacleDef('cracked'), phase.id), TILE, TILE, () => {
+        drawRock();
+        // A zigzag split down the face: this one gives way to a swing.
+        g.lineStyle(3, 0x0c0a16).beginPath();
+        g.moveTo(TILE / 2 - 2, 8)
+          .lineTo(TILE / 2 + 5, 17)
+          .lineTo(TILE / 2 - 4, 25)
+          .lineTo(TILE / 2 + 3, TILE - 9);
+        g.moveTo(TILE / 2 - 4, 25).lineTo(12, 30);
+        g.strokePath();
+      });
     }
+
+    bakeMissing(obstacleDef('pit').texture, TILE, TILE, () => {
+      g.fillStyle(0x000000, 0.45).fillRoundedRect(2, 2, TILE - 4, TILE - 4, 8);
+      g.fillStyle(0x030207).fillRoundedRect(5, 5, TILE - 10, TILE - 10, 7);
+      g.fillStyle(0x000000).fillRoundedRect(9, 12, TILE - 18, TILE - 19, 5);
+    });
+    this.slicePit();
+
+    bakeMissing(obstacleDef('spikes').texture, TILE, TILE, () => {
+      // No plate: staggered rows of points coming straight out of the floor, each over its hole.
+      for (let row = 0; row < 4; row++) {
+        const shift = row % 2 === 0 ? 0 : 7;
+        for (let x = 10 + shift; x < TILE - 4; x += 14) {
+          const y = 14 + row * 10;
+          g.fillStyle(0x07060d, 0.7).fillEllipse(x, y, 11, 4);
+          g.fillStyle(0x6b6f80).fillTriangle(x - 4, y, x + 4, y, x, y - 12);
+          g.fillStyle(0xcfd6e6).fillTriangle(x - 1, y - 1, x + 1, y - 1, x, y - 11);
+        }
+      }
+    });
 
     bake('door', TILE, TILE, () => {
       g.fillStyle(0x0c0a16).fillRect(0, 0, TILE, TILE);
@@ -300,6 +355,24 @@ export class BootScene extends Phaser.Scene {
     this.createStripLoop(BONE_PILE, BONE_PILE_FRAMES);
   }
 
+  /** Cuts the pit art, loaded or baked, into quarter pieces, so touching pits join up (see `pitPiece`). */
+  private slicePit() {
+    const half = TILE / 2;
+    const source = this.textures.get(obstacleDef('pit').texture).getSourceImage() as CanvasImageSource;
+    const sheet = this.textures.createCanvas(PIT_PARTS, half * PIT_PIECES.length * 4, half)!;
+    let x = 0;
+    for (const piece of PIT_PIECES) {
+      for (const dy of [-1, 1]) {
+        for (const dx of [-1, 1]) {
+          drawPitPiece(sheet.context, source, piece, dx, dy, x);
+          sheet.add(pitFrame(piece, dx, dy), 0, x, 0, half, half);
+          x += half;
+        }
+      }
+    }
+    sheet.refresh();
+  }
+
   private createStripLoop(texture: string, frameCount: number) {
     const frames = walkFrames(frameCount);
     const key = walkAnimKey(texture);
@@ -341,4 +414,39 @@ export class BootScene extends Phaser.Scene {
     }
     this.scene.start('game', runFromParams(params));
   }
+}
+
+/** Rock left in the corner where an L of pits turns around a floor tile. */
+const PIT_NUB = 11;
+
+/**
+ * One quarter of a pit tile, taken from the whole-tile art: its own corner for a lone corner,
+ * the middle of an edge for a rim that runs on, the middle for open hole.
+ */
+function drawPitPiece(
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  piece: PitPiece,
+  dx: number,
+  dy: number,
+  x: number,
+) {
+  const half = TILE / 2;
+  const mid = TILE / 4;
+  const near = (d: number) => (d < 0 ? 0 : half);
+  const from: Record<PitPiece, [number, number]> = {
+    outer: [near(dx), near(dy)],
+    rimX: [near(dx), mid],
+    rimY: [mid, near(dy)],
+    inner: [mid, mid],
+    fill: [mid, mid],
+  };
+  const [sx, sy] = from[piece];
+  ctx.drawImage(source, sx, sy, half, half, x, 0, half, half);
+  if (piece !== 'inner') return;
+  const cornerX = dx < 0 ? 0 : TILE - PIT_NUB;
+  const cornerY = dy < 0 ? 0 : TILE - PIT_NUB;
+  const toX = x + (dx < 0 ? 0 : half - PIT_NUB);
+  const toY = dy < 0 ? 0 : half - PIT_NUB;
+  ctx.drawImage(source, cornerX, cornerY, PIT_NUB, PIT_NUB, toX, toY, PIT_NUB, PIT_NUB);
 }

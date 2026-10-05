@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  ALTAR_ROW,
   COLORS,
   DOOR_COL,
   DOOR_ROW,
@@ -64,12 +65,14 @@ import {
   twinDef,
 } from '../floor/roomEvents';
 import { startsLocked } from '../floor/locks';
+import { OBSTACLE_TUNING, rollObstacles } from '../floor/obstacles';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { pad } from '../input/touch';
 import { BeamWeapon } from './BeamWeapon';
 import type { BossIntroData } from './BossIntroScene';
 import { ChainShock, type StrikeHost } from './ChainShock';
 import { type EventHost, RoomEventDirector } from './RoomEventDirector';
+import { RoomObstacles } from './RoomObstacles';
 
 /** Where the player appears when entering through a given side. */
 const ENTRY: Record<Dir, { col: number; row: number }> = {
@@ -199,6 +202,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   private labelLocale?: Locale;
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private doorBlocks!: Phaser.Physics.Arcade.StaticGroup;
+  private obstacles!: RoomObstacles;
+  /** Whether a broken cracked rock leaves a coin. */
+  private rubbleRng!: Rng;
   /** This room's closed doors by side, so a swing can open just the one it hits. */
   private doorBlockAt = new Map<Dir, Phaser.Physics.Arcade.Sprite>();
   /** Doors a swing opened mid fight; walking back into an uncleared room shuts them again. */
@@ -259,6 +265,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.luck = data.luck;
     this.maxHealthLost = data.maxHealthLost;
     this.dropRng = new Rng(`${this.seed}:drops:${this.depth}`);
+    this.rubbleRng = new Rng(`${this.seed}:rubble:${this.depth}`);
     this.clock = new GameClock();
     // A restart after death would otherwise inherit the paused world.
     this.physics.resume();
@@ -269,6 +276,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     for (const [room, id] of events) room.event = id;
     const lockRng = new Rng(`${this.seed}:locks:${this.depth}`);
     for (const room of this.floor.rooms.values()) room.locked = startsLocked(lockRng, room);
+    this.rollObstacles();
     this.eventDirector = new RoomEventDirector(this, this);
 
     const rewardRooms = [...this.floor.rooms.values()].filter((r) => r.type === 'treasure' || r.type === 'boss');
@@ -286,6 +294,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.cameras.main.setBackgroundColor(this.phase.palette.background);
     this.walls = this.physics.add.staticGroup();
     this.doorBlocks = this.physics.add.staticGroup();
+    this.obstacles = new RoomObstacles(this);
     this.enemies = this.physics.add.group();
     this.bolts = this.physics.add.group();
     this.orbs = this.physics.add.group({ classType: HostileOrb, maxSize: ORB_POOL_SIZE });
@@ -306,6 +315,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.scene.bringToTop('touch');
 
     this.input.keyboard!.on('keydown-ESC', () => this.requestPause());
+  }
+
+  /** Each common room's own stream, so a room's layout doesn't hang on the rest of the floor. */
+  private rollObstacles() {
+    for (const room of this.floor.rooms.values()) {
+      if (room.type !== 'normal') continue;
+      room.obstacles = rollObstacles(new Rng(`${this.seed}:obstacles:${this.depth}:${room.x},${room.y}`));
+    }
   }
 
   /** A new phase is announced by name, with the floor under it. */
@@ -336,10 +353,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   /** Wires room collisions and combat overlaps, using each enemy's current contact damage. */
   private setupCollisions() {
     const p = this.physics;
-    p.add.collider(this.player, [this.walls, this.doorBlocks]);
-    p.add.collider(this.enemies, [this.walls, this.doorBlocks]);
+    const { solid, pits } = this.obstacles;
+    p.add.collider(this.player, [this.walls, this.doorBlocks, solid, pits]);
+    p.add.collider(this.enemies, [this.walls, this.doorBlocks, solid]);
+    p.add.collider(this.enemies, pits, undefined, (e) => !(e as Enemy).def.flies);
     p.add.collider(this.enemies, this.enemies, undefined, (a, b) => !(a as Enemy).def.ghost && !(b as Enemy).def.ghost);
-    p.add.collider(this.bolts, [this.walls, this.doorBlocks], (bolt) => (bolt as Bolt).burst());
+    p.add.collider(this.bolts, [this.walls, this.doorBlocks, solid], (bolt) => (bolt as Bolt).burst());
 
     p.add.overlap(this.bolts, this.enemies, (b, e) => {
       const bolt = b as Bolt;
@@ -357,7 +376,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       this.chainShock.trigger(this.player.stats, enemy, enemyX, enemyY, damage, now);
     });
 
-    p.add.collider(this.orbs, [this.walls, this.doorBlocks], (orb) => (orb as HostileOrb).release());
+    p.add.collider(this.orbs, [this.walls, this.doorBlocks, solid], (orb) => (orb as HostileOrb).release());
     p.add.overlap(this.player, this.orbs, (_, o) => {
       const orb = o as HostileOrb;
       if (!orb.active) return;
@@ -393,6 +412,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     }
     if (shot.beam) this.beamWeapon.fire(shot.beam, this.player.stats, time);
 
+    const feet = (this.player.body as Phaser.Physics.Arcade.Body).center;
+    this.obstacles.follow(feet.x, feet.y);
+    this.stepOnSpikes(feet.x, feet.y);
     const enemies = this.enemies.getChildren() as Enemy[];
     for (const enemy of enemies) enemy.chase(this.player, time);
     this.applyWallSlams(enemies);
@@ -416,6 +438,13 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
     if (!this.room.cleared && this.enemiesLeft() === 0 && !this.eventDirector.holdsClear()) this.clearRoom();
     if (this.room.cleared || this.openDoors.size > 0) this.checkDoorExit();
+  }
+
+  /** Spikes hurt on every step, as often as the player's invulnerability lets them. */
+  private stepOnSpikes(x: number, y: number) {
+    const damage = this.obstacles.damageAt(x, y);
+    if (damage <= 0 || this.cheats.god) return;
+    if (this.player.hurt(damage) && this.player.health <= 0) this.onDeath('death.spikes');
   }
 
   private updateBossHealth(enemies: readonly Enemy[]) {
@@ -468,6 +497,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.chainShock.clear();
 
     this.buildLayout(room);
+    this.obstacles.build(room.obstacles, this.phase);
 
     const entry = via ? ENTRY[DIRS[via].opposite] : { col: DOOR_COL, row: DOOR_ROW };
     this.player.teleport(tileX(entry.col), tileY(entry.row));
@@ -595,7 +625,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
         ROOM_Y + margin,
         ROOM_Y + ROOM_H - margin,
       );
-      this.spawnEnemy(def, x, y, rng.next() * 1000);
+      const spot = this.obstacles.snap(x, y);
+      this.spawnEnemy(def, spot.x, spot.y, rng.next() * 1000);
     }
   };
 
@@ -622,7 +653,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     for (let row = 1; row < ROOM_ROWS - 1; row++) {
       for (let col = 1; col < ROOM_COLS - 1; col++) {
         const far = Phaser.Math.Distance.Between(tileX(col), tileY(row), this.player.x, this.player.y) > TILE * 3.5;
-        if (far) cells.push({ col, row });
+        if (far && this.obstacles.isOpen(col, row)) cells.push({ col, row });
       }
     }
     return cells;
@@ -633,6 +664,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.enemies.add(enemy);
     enemy.initBody();
     enemy.shoot = this.fireOrb;
+    enemy.steer = this.obstacles.steer;
     enemy.summon = this.summonMinions;
     enemy.explode = this.explodeEnemy;
     enemy.blinkTo = this.blinkSpot;
@@ -683,6 +715,14 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     }
     for (const [dir, block] of [...this.doorBlockAt]) {
       if (swingTouchesBox(block.x - x, block.y - y, aim, TILE / 2, TILE / 2)) this.unlockDoor(dir);
+    }
+    this.breakRocks((rx, ry) => swingTouchesBox(rx - x, ry - y, aim, TILE / 2, TILE / 2));
+  }
+
+  /** Cracked rocks `struck` picks crumble; now and then one hides a coin. */
+  private breakRocks(struck: (x: number, y: number) => boolean) {
+    for (const { x, y } of this.obstacles.breakWhere(struck)) {
+      if (this.rubbleRng.chance(OBSTACLE_TUNING.rubbleCoinChance)) this.spawnDrop('currency', x, y);
     }
   }
 
@@ -832,7 +872,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       const angle = (i / count) * Math.PI * 2 + rng.next();
       const sx = Phaser.Math.Clamp(x + Math.cos(angle) * SPLIT_SPREAD, ROOM_X + margin, ROOM_X + ROOM_W - margin);
       const sy = Phaser.Math.Clamp(y + Math.sin(angle) * SPLIT_SPREAD, ROOM_Y + margin, ROOM_Y + ROOM_H - margin);
-      this.spawnEnemy(def, sx, sy, rng.next() * 1000);
+      const spot = this.obstacles.snap(sx, sy);
+      this.spawnEnemy(def, spot.x, spot.y, rng.next() * 1000);
     }
   }
 
@@ -850,6 +891,8 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       if (other === enemy || !other.active || !other.hittable) continue;
       if (inBlast(other.x - x, other.y - y, blast.radius)) this.strikeEnemy(other, blast.damage, x, y, BLAST_KNOCKBACK);
     }
+    // A rock counts as caught once the blast reaches its middle.
+    this.breakRocks((rx, ry) => inBlast(rx - x, ry - y, blast.radius));
     if (enemy.active) this.killEnemy(enemy);
   };
 
@@ -927,7 +970,9 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const margin = TILE + DROP_PICKUP_RADIUS / 2;
     const px = Phaser.Math.Clamp(x + dx, ROOM_X + margin, ROOM_X + ROOM_W - margin);
     const py = Phaser.Math.Clamp(y + dy, ROOM_Y + margin, ROOM_Y + ROOM_H - margin);
-    const image = this.placeDrop(kind, px, py).setScale(0);
+    // Nor on an obstacle, where it could sit inside a rock or over a pit.
+    const spot = this.obstacles.snap(px, py);
+    const image = this.placeDrop(kind, spot.x, spot.y).setScale(0);
     this.tweens.add({ targets: image, scale: 1, duration: 220, ease: 'Back.Out' });
   }
 
@@ -1221,7 +1266,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
   /** Where the altar stood. The player is right there after paying, so it arms once they step away. */
   placeAltarPedestal(room: RoomNode) {
-    this.spawnItem(room, DOOR_ROW - 2, true);
+    this.spawnItem(room, ALTAR_ROW, true);
   }
 
   placeRewardItem(room: RoomNode, rng: Rng): boolean {

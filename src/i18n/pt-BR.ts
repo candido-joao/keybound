@@ -45,6 +45,7 @@ export const ptBR = {
   'event.dark.cleared': 'A sala foi exorcizada',
   'death.title': 'Engolido pelas sombras',
   'death.greed': 'A ganância foi sua ruína',
+  'death.spikes': 'Espetado nos espinhos',
   'victory.title': 'A última porta se abriu',
   'pause.title': 'Pausado',
   'pause.seed': 'seed {seed}',
@@ -216,6 +217,7 @@ export const ptBR = {
   'wiki.nav.enemies': 'Inimigos',
   'wiki.nav.items': 'Itens',
   'wiki.nav.events': 'Salas especiais',
+  'wiki.nav.obstacles': 'Obstáculos',
   'wiki.nav.key': 'Chave',
   'wiki.footer': 'Gerada dos próprios dados do jogo: está sempre na versão que você joga.',
   'wiki.floor-range': 'Andares {first}–{last}',
@@ -249,6 +251,7 @@ export const ptBR = {
   'wiki.trait.anchored': 'Fixo no chão: não anda e não é empurrado',
   'wiki.trait.axis-walk': 'Anda só em linha reta, virando em ângulo reto',
   'wiki.trait.ghost': 'Atravessa outros inimigos',
+  'wiki.trait.flies': 'Flutua sobre buracos e espinhos',
   'wiki.trait.fury':
     'Abaixo de {pct}% do HP entra em fúria: investidas que ricocheteiam nas paredes ({damage} de dano)',
   'wiki.items.intro':
@@ -284,6 +287,17 @@ export const ptBR = {
   'wiki.shop.item': 'Um item do sorteio do tesouro: {price} moedas',
   'wiki.shop.heal': 'Cura grande, {pct}% da vida máxima: {price} moedas',
   'wiki.shop.drive': '+1 carga máxima de drive, já carregada, até {max}: {price} moedas',
+  'obstacle.rock.name': 'Pedra',
+  'obstacle.rock.text': 'Bloqueia a passagem e os tiros. O feixe passa por cima.',
+  'obstacle.cracked.name': 'Pedra rachada',
+  'obstacle.cracked.text':
+    'Como a pedra, mas o golpe da chave ou uma explosão a quebra. {pct}% de chance de esconder uma moeda.',
+  'obstacle.pit.name': 'Buraco',
+  'obstacle.pit.text': 'Ninguém atravessa a pé. Tiros e inimigos que flutuam passam por cima.',
+  'obstacle.spikes.name': 'Espinhos',
+  'obstacle.spikes.text': 'Pisar custa {damage} de HP. Inimigos andam por cima sem se ferir.',
+  'wiki.obstacles.intro':
+    'Salas comuns podem ter obstáculos, espelhados como numa sala construída; {pct}% ficam vazias. As portas e o centro ficam sempre livres, e todo o chão é alcançável.',
   'wiki.event.dark.name': 'Sala escura',
   'wiki.event.dark.text':
     'A luz se apaga e os inimigos vêm em {min} a {max} ondas. Cada onda vencida faz chover moedas e orbes de cura.',

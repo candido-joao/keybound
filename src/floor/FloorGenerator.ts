@@ -1,5 +1,6 @@
 import { FLOOR_GRID_H, FLOOR_GRID_W } from '../config';
 import type { Rng } from '../core/rng';
+import type { ObstacleGrid } from './obstacles';
 import type { RoomEventId } from './roomEvents';
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
@@ -28,6 +29,8 @@ export interface RoomNode {
   event?: RoomEventId;
   /** Every door into it stays shut until a key swing unlocks one; see `startsLocked`. */
   locked?: boolean;
+  /** Common rooms only; a cracked rock broken in it is gone for good. */
+  obstacles?: ObstacleGrid;
 }
 
 export class Floor {
