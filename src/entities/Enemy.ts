@@ -183,8 +183,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   private walk(target: Phaser.GameObjects.Components.Transform, time: number) {
     const body = this.body as Phaser.Physics.Arcade.Body;
-    const speed = this.def.speed * this.speedScale;
     const goal = this.steer?.(this, target) ?? target;
+    // Steered to its own spot: the way ahead is taken, so it waits its turn.
+    const speed = goal.x === this.x && goal.y === this.y ? 0 : this.def.speed * this.speedScale;
     if (this.def.axisWalk) {
       const axis = dominantAxis(goal.x - this.x, goal.y - this.y);
       body.setVelocity(axis.x * speed, axis.y * speed);

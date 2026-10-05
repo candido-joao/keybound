@@ -84,10 +84,8 @@ export const ptBR = {
   'summary.rooms': 'Salas {n}',
   'summary.no-items': 'Nenhum item',
   'summary.seeded': 'seed fixa',
-  'summary.new-run': 'Enter nova run',
+  'summary.new-run': 'R nova run',
   'summary.new-run-touch': 'Nova run',
-  'summary.same-seed': 'R repetir seed',
-  'summary.same-seed-touch': 'Repetir seed',
   'summary.menu': 'Esc menu',
   'summary.menu-touch': 'Menu',
 

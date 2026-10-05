@@ -173,10 +173,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
   }
 
   private rollFloor() {
-    const setup = setUpFloor(this.seed, this.depth, this.items);
-    this.floor = setup.floor;
-    this.boss = setup.boss;
-    this.roomItems = setup.roomItems;
+    ({ floor: this.floor, boss: this.boss, roomItems: this.roomItems } = setUpFloor(this.seed, this.depth, this.items));
   }
 
   /** Physics groups, the player and the systems that run the room. */
@@ -265,6 +262,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     const time = this.clock.now;
     this.updatePlayer(time);
     const enemies = this.enemyGroup();
+    this.obstacles.herd(enemies);
     for (const enemy of enemies) enemy.chase(this.player, time);
     this.combat.applyWallSlams(enemies);
     this.beamWeapon.update(this.player, time);
@@ -472,9 +470,9 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     return { kills: this.kills, roomsCleared: this.roomsCleared, timeMs: this.pastTimeMs + this.clock.now };
   }
 
-  /** Replays or rolls a fresh run in place; the HUD keeps running. */
-  restartRun(sameSeed: boolean) {
-    this.scene.restart(newRun(sameSeed ? this.seed : undefined));
+  /** Rolls a fresh run in place; the HUD keeps running. A seed is replayed only by typing it on the title. */
+  restartRun() {
+    this.scene.restart(newRun());
   }
 
   /** What the debug console can change. */

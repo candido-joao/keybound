@@ -1,8 +1,9 @@
 import type Phaser from 'phaser';
 import { DOOR_COL, ROOM_COLS, TILE, tileX, tileY } from '../config';
 import type { Enemy, Point } from '../entities/Enemy';
+import { FlowField } from '../floor/flowField';
 import {
-  FlowField,
+  CELLS,
   INTERIOR_CELLS,
   PIT_PARTS,
   PIT_QUARTERS,
@@ -18,6 +19,7 @@ import {
   obstacleTexture,
   obstacleVariant,
   pitFrame,
+  passable,
   pitPiece,
   rowAt,
   straightPath,
@@ -49,6 +51,10 @@ export class RoomObstacles {
   private targetCell = -1;
   private readonly waypoint: Point = { x: 0, y: 0 };
   private readonly spot: Point = { x: 0, y: 0 };
+  private readonly held: Point = { x: 0, y: 0 };
+  /** Enemies standing on each cell this frame, and as the flow fields were last built. */
+  private readonly crowd = new Uint8Array(CELLS);
+  private readonly builtCrowd = new Uint8Array(CELLS);
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -126,13 +132,56 @@ export class RoomObstacles {
     const cell = cellIndex(col, row);
     if (cell === this.targetCell) return;
     this.targetCell = cell;
-    this.ground.build(this.grid, false, col, row);
-    this.air.build(this.grid, true, col, row);
+    this.builtCrowd.set(this.crowd);
+    this.ground.build(this.grid, false, col, row, this.crowd);
+    this.air.build(this.grid, true, col, row, this.crowd);
+  }
+
+  /**
+   * Keeps every enemy on the floor, then counts who stands where: a changed crowd repaths, so
+   * the pack spreads out around obstacles and queues in a corridor instead of jamming it.
+   */
+  herd(enemies: readonly Enemy[]) {
+    for (const enemy of enemies) this.keepInside(enemy);
+    if (!this.steering) return;
+    this.crowd.fill(0);
+    for (const enemy of enemies) this.stand(enemy);
+    if (this.crowdMoved()) this.targetCell = -1;
+  }
+
+  private stand(enemy: Enemy) {
+    // Ghosts drift through the others, so they neither block nor queue.
+    if (enemy.def.ghost) return;
+    const { x, y } = (enemy.body as Phaser.Physics.Arcade.Body).center;
+    const col = colAt(x);
+    const row = rowAt(y);
+    if (passable(this.grid, col, row, true)) this.crowd[cellIndex(col, row)]++;
+  }
+
+  private crowdMoved(): boolean {
+    for (let cell = 0; cell < CELLS; cell++) {
+      if (this.crowd[cell] !== this.builtCrowd[cell]) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Puts an enemy back on the floor when the pack shoved it into a wall, a rock or, on foot, a
+   * pit: Arcade gives up separating a body pushed that deep, and one left past the wall locks the room.
+   */
+  private keepInside(enemy: Enemy) {
+    const body = enemy.body as Phaser.Physics.Arcade.Body;
+    const col = colAt(body.center.x);
+    const row = rowAt(body.center.y);
+    if (passable(this.grid, col, row, enemy.def.flies === true)) return;
+    const open = nearestOpen(this.grid, col, row);
+    body.reset(tileX(open.col), tileY(open.row));
   }
 
   /**
    * Where an enemy should head to reach `target`: the target itself while the way is straight,
-   * else the next cell on the path around what's in between. The returned point is shared.
+   * else the next cell on the path around what's in between. Its own spot (stand still) when
+   * that cell is taken and there's no short way around: it queues. The returned point is shared.
    */
   readonly steer = (enemy: Enemy, target: Point): Point => {
     if (!this.steering) return target;
@@ -142,11 +191,18 @@ export class RoomObstacles {
     if (straightPath(this.grid, flying, body.center, target, body.halfWidth)) return target;
     const next = (flying ? this.air : this.ground).next(colAt(x), rowAt(y));
     if (next < 0) return target;
+    if (!enemy.def.ghost && this.crowd[next] > 0) return this.hold(enemy);
     const col = next % ROOM_COLS;
     this.waypoint.x = tileX(col);
     this.waypoint.y = tileY((next - col) / ROOM_COLS);
     return this.waypoint;
   };
+
+  private hold(enemy: Enemy): Point {
+    this.held.x = enemy.x;
+    this.held.y = enemy.y;
+    return this.held;
+  }
 
   /** HP lost standing here; 0 off spikes. */
   damageAt(x: number, y: number): number {
