@@ -839,6 +839,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     }
   }
 
+  /** Clears a pile's remains and spawns the enemy back with a share of its max HP. */
   private revivePile(pile: Pile) {
     const { image, parts, def } = pile;
     this.tweens.killTweensOf(parts);
@@ -1178,13 +1179,13 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     return this.add.image(x, y, 'key').setAngle(-45).setScale(0.75);
   }
 
-  /** The price turns red and the ware shakes: the player can't pay, or it would do nothing. */
   /** Flashes the refusal once per bump, not on every frame of it; returns the new bump time. */
   private refuseOnce(label: Phaser.GameObjects.Text, icon: Phaser.GameObjects.Image, refusedAt: number): number {
     if (this.clock.now - refusedAt > REFUSE_FLASH_MS) this.refuse(label, icon);
     return this.clock.now;
   }
 
+  /** The price turns red and the ware shakes: the player can't pay, or it would do nothing. */
   private refuse(label: Phaser.GameObjects.Text, icon: Phaser.GameObjects.Image) {
     label.setColor('#e8435a');
     this.time.delayedCall(REFUSE_FLASH_MS, () => label.active && label.setColor(COLORS.text));

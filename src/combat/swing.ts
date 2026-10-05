@@ -61,6 +61,7 @@ export function swingTouchesBox(dx: number, dy: number, aim: number, halfW: numb
   return false;
 }
 
+/** Whether points along a single ray at `angle`, at the fan's depths, land inside the box. */
 function rayTouchesBox(angle: number, dx: number, dy: number, halfW: number, halfH: number): boolean {
   for (const share of FAN_DEPTHS) {
     const x = Math.cos(angle) * SWING.reach * share;

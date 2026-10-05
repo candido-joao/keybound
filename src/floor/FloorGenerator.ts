@@ -76,6 +76,7 @@ export function generateFloor(rng: Rng, floorDepth: number): Floor {
   throw new Error(`Floor generation failed (seed ${rng.seed}, depth ${floorDepth})`);
 }
 
+/** Retries `tryGenerate` at a fixed size until one lays out, or gives up. */
 function tryGenerateSize(rng: Rng, size: number): Floor | null {
   for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
     const floor = tryGenerate(rng, size);
@@ -101,6 +102,7 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
   const start = add(cx, cy, 0);
   start.type = 'start';
   const queue: RoomNode[] = [start];
+  /** Queues valid, unvisited neighbors of `room` as new rooms to grow from. */
   const grow = (room: RoomNode) => {
     for (const dir of rng.shuffle(Object.keys(DIRS) as Dir[])) {
       const nx = room.x + DIRS[dir].dx;

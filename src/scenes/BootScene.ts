@@ -410,6 +410,7 @@ function drawSpikeRow(g: Phaser.GameObjects.Graphics, row: number) {
   }
 }
 
+/** Draws the fallback body used for enemies that have no art yet. */
 function drawPlaceholder(g: Phaser.GameObjects.Graphics, colors: { body: number; eye: number }) {
   const { body, horns, eyes, eyeRadius } = PLACEHOLDER_BODY;
   g.fillStyle(colors.body).fillEllipse(body.x, body.y, body.w, body.h);

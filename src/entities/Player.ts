@@ -280,6 +280,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return power > 0 ? { power, continuous: false } : null;
   }
 
+  /** Marks the start of the hold and updates the charge stage shown to the player. */
   private holdCharge(time: number) {
     if (this.chargeStartAt < 0) this.chargeStartAt = time;
     this.showChargeStage(chargeStage(this.chargeShare(time)), time);

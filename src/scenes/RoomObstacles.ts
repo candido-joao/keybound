@@ -85,6 +85,7 @@ export class RoomObstacles {
     this.decor.push(this.scene.add.image(x, y, texture).setDepth(0.5));
   }
 
+  /** Places a solid rock, flipped to face the room's middle, tracked if it can be broken. */
   private placeRock(col: number, row: number, texture: string, breakable: boolean) {
     const rock = this.solid.create(tileX(col), tileY(row), texture) as Phaser.Physics.Arcade.Sprite;
     // Turned to face the room's middle, like the layout mirrored around it.
@@ -103,6 +104,7 @@ export class RoomObstacles {
     for (const [dx, dy] of PIT_QUARTERS) this.placePitPiece(col, row, dx, dy);
   }
 
+  /** Draws one of a pit tile's four quarter pieces, in the frame its neighbors call for. */
   private placePitPiece(col: number, row: number, dx: number, dy: number) {
     const offset = TILE / 4;
     const frame = pitFrame(pitPiece(this.grid, col, row, dx, dy), dx, dy);

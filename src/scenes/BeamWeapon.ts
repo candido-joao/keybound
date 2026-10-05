@@ -143,6 +143,7 @@ export class BeamWeapon {
     }
   }
 
+  /** Traces every beam of one directional fan, refracting each that lands and allows it. */
   private traceFan(
     s: PlayerStats,
     x: number,

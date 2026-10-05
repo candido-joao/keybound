@@ -272,6 +272,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
+  /** Stands still until the fuse runs out, then triggers the explosion. */
   private burnFuse(attack: ExplodeAttack, time: number): boolean {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     if (time < this.fuseEndsAt) return true;
@@ -361,6 +362,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
+  /** Stands still through the telegraph, then summons once it elapses. */
   private channelSummon(summon: SummonAttack, time: number): boolean {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     if (time < this.summonAt) return true;
