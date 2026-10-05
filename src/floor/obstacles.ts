@@ -142,6 +142,7 @@ export function obstacleArtFiles(phaseIds: readonly string[]): Map<string, strin
   return files;
 }
 
+/** Creates a fresh room-sized grid, including the wall ring, with every cell set to open floor. */
 export function emptyGrid(): ObstacleGrid {
   return new Array<ObstacleId | null>(CELLS).fill(null);
 }
