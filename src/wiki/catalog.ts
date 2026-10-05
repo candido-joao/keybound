@@ -5,6 +5,7 @@ import { type Item, type ItemPool, baseId } from '../combat/stats';
 import { SHOP } from '../combat/shop';
 import { DRIVE, SWING } from '../combat/swing';
 import { LOCK_CHANCE } from '../floor/locks';
+import { OBSTACLES, OBSTACLE_TUNING, type ObstacleId, obstacleDef } from '../floor/obstacles';
 import { PHASES, type PhaseDef } from '../floor/phases';
 import { EVENT_CHANCE, EVENT_TUNING, ROOM_EVENTS, type RoomEventId } from '../floor/roomEvents';
 import type { MessageKey } from '../i18n';
@@ -108,6 +109,7 @@ export function enemyLines(def: EnemyDef): Line[] {
   if (def.anchored) lines.push({ key: 'wiki.trait.anchored' });
   if (def.axisWalk) lines.push({ key: 'wiki.trait.axis-walk' });
   if (def.ghost) lines.push({ key: 'wiki.trait.ghost' });
+  if (def.flies) lines.push({ key: 'wiki.trait.flies' });
   const child = def.split && enemyById(def.split.id);
   if (def.split && child) {
     lines.push({ key: 'wiki.trait.split', params: { count: def.split.count, name: { key: child.name } } });
@@ -252,4 +254,24 @@ export function shopLines(): Line[] {
     { key: 'wiki.shop.heal', params: { price: prices.heal, pct: pct(healShare) } },
     { key: 'wiki.shop.drive', params: { price: prices.drive, max: DRIVE.maxCap } },
   ];
+}
+
+export interface ObstacleEntry {
+  id: ObstacleId;
+  name: MessageKey;
+  text: Line;
+}
+
+/** Each obstacle with its numbers, in registry order. */
+export function obstacleEntries(): ObstacleEntry[] {
+  const params: Partial<Record<ObstacleId, Line['params']>> = {
+    cracked: { pct: pct(OBSTACLE_TUNING.rubbleCoinChance) },
+    spikes: { damage: obstacleDef('spikes').damage },
+  };
+  return OBSTACLES.map(({ id, name, text }) => ({ id, name, text: { key: text, params: params[id] } }));
+}
+
+/** Share of common rooms left without obstacles, in %. */
+export function bareRoomPct(): number {
+  return pct(OBSTACLE_TUNING.emptyChance);
 }

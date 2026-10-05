@@ -136,6 +136,8 @@ export interface EnemyDef {
   anchored?: boolean;
   /** Drifts through other enemies. */
   ghost?: boolean;
+  /** Floats over pits and spikes; rock still stops it. */
+  flies?: boolean;
   /** Fades in and out; hidden, it neither hurts nor takes hits. */
   fade?: FadeCycle;
   blink?: BlinkMove;
@@ -224,6 +226,7 @@ export const LANTERN: EnemyDef = {
   boss: false,
   attacks: [],
   ghost: true,
+  flies: true,
   fade: { shownMs: 1800, hiddenMs: 1500, warnMs: 300 },
   deathColor: 0x5fbf7a,
 };

@@ -41,6 +41,11 @@ const FADE_FLICKER_MS = 70;
 const LUNGE_WALL_GRACE_MS = 60;
 
 /** Fires one enemy projectile; GameScene hands it out from its orb pool. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export type OrbShooter = (x: number, y: number, angle: number, speed: number, damage: number) => void;
 
 /**
@@ -88,6 +93,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   /** Set by GameScene; without it the enemy never fires. */
   shoot?: OrbShooter;
+  /** Set by GameScene: where to head for on the way to the target. Without it, straight at it. */
+  steer?: (enemy: Enemy, target: Point) => Point;
   /** Set by GameScene; without it the enemy never summons. */
   summon?: (summoner: Enemy, attack: SummonAttack) => void;
   private summonAttack?: SummonAttack;
@@ -200,14 +207,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private walk(target: Phaser.GameObjects.Components.Transform, time: number) {
     const body = this.body as Phaser.Physics.Arcade.Body;
     const speed = this.def.speed * this.speedScale;
+    const goal = this.steer?.(this, target) ?? target;
     if (this.def.axisWalk) {
-      const axis = dominantAxis(target.x - this.x, target.y - this.y);
+      const axis = dominantAxis(goal.x - this.x, goal.y - this.y);
       body.setVelocity(axis.x * speed, axis.y * speed);
       this.face(body.velocity.x);
       return;
     }
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-    const wobble = Math.sin((time + this.wobbleSeed) / 180) * 0.6;
+    const angle = Phaser.Math.Angle.Between(this.x, this.y, goal.x, goal.y);
+    // Wobbling on the way around an obstacle would rub it at every corner.
+    const wobble = goal === target ? Math.sin((time + this.wobbleSeed) / 180) * 0.6 : 0;
     body.setVelocity(Math.cos(angle + wobble) * speed, Math.sin(angle + wobble) * speed);
     this.face(body.velocity.x);
   }
@@ -448,8 +457,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   /**
    * Damage owed for being pushed into a wall, once per push; 0 if none. Arcade marks a body
-   * blocked when it runs into a static one, and walls and closed doors are the only static
-   * bodies an enemy collides with.
+   * blocked when it runs into a static one, and walls, closed doors, rocks and pits are the
+   * only static bodies an enemy collides with.
    */
   slammed(): number {
     const owed = this.pendingSlam;
