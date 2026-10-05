@@ -195,6 +195,7 @@ export class HudScene extends Phaser.Scene {
     this.bossNameKey = undefined;
   }
 
+  /** Hides the boss bar and name, once, the first update after the boss is gone. */
   private hideBossBar() {
     if (this.drawnBossMax === 0) return;
     this.drawnBossMax = 0;

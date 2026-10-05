@@ -69,6 +69,7 @@ export class TouchScene extends Phaser.Scene {
     if (show) this.draw();
   }
 
+  /** Tracks whether the pad is shown, releasing every touch the moment it hides. */
   private setShown(show: boolean) {
     this.shown = show;
     if (!show) pad.releaseAll();

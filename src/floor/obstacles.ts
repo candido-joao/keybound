@@ -139,6 +139,7 @@ export function obstacleArtFiles(phaseIds: readonly string[]): Map<string, strin
   return files;
 }
 
+/** Registers the art file for every variant of one obstacle in one phase. */
 function addVariantArt(files: Map<string, string>, def: ObstacleDef, phaseId: string) {
   for (let v = 0; v < def.variants; v++) files.set(obstacleTexture(def, phaseId, v), obstacleArt(def, phaseId, v));
 }
