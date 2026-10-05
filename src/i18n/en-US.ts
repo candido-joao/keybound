@@ -84,10 +84,8 @@ export const enUS = {
   'summary.rooms': 'Rooms {n}',
   'summary.no-items': 'No items',
   'summary.seeded': 'fixed seed',
-  'summary.new-run': 'Enter new run',
+  'summary.new-run': 'R new run',
   'summary.new-run-touch': 'New run',
-  'summary.same-seed': 'R replay seed',
-  'summary.same-seed-touch': 'Replay seed',
   'summary.menu': 'Esc menu',
   'summary.menu-touch': 'Menu',
 

@@ -87,26 +87,27 @@ describe('beamTickDamage', () => {
 describe('traceBeam', () => {
   const path = new Array<number>(200).fill(0);
   const end = (points: number) => ({ x: path[points * 2 - 2], y: path[points * 2 - 1] });
+  const ray = (x: number, y: number, length: number, turnPerPx: number) => ({ x, y, angle: 0, length, turnPerPx });
 
   it('runs straight for its length', () => {
-    const points = traceBeam(path, 100, 100, 0, 120, 0, ROOM);
+    const points = traceBeam(path, ray(100, 100, 120, 0), ROOM);
     expect(end(points).x).toBeCloseTo(220);
     expect(end(points).y).toBeCloseTo(100);
   });
 
   it('stops at the wall', () => {
-    const points = traceBeam(path, 450, 100, 0, 120, 0, ROOM);
+    const points = traceBeam(path, ray(450, 100, 120, 0), ROOM);
     expect(end(points).x).toBeCloseTo(500);
   });
 
   it('bends toward a target when homing', () => {
-    const points = traceBeam(path, 100, 100, 0, 200, 0.02, ROOM, () => Math.PI / 2);
+    const points = traceBeam(path, ray(100, 100, 200, 0.02), ROOM, () => Math.PI / 2);
     expect(end(points).y).toBeGreaterThan(150);
   });
 
   it('stops when the buffer is full', () => {
     const small = new Array<number>(6).fill(0);
-    expect(traceBeam(small, 0, 0, 0, 1000, 0, { minX: -1e4, minY: -1e4, maxX: 1e4, maxY: 1e4 })).toBe(3);
+    expect(traceBeam(small, ray(0, 0, 1000, 0), { minX: -1e4, minY: -1e4, maxX: 1e4, maxY: 1e4 })).toBe(3);
   });
 });
 

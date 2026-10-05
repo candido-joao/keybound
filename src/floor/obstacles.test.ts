@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ALTAR_ROW, DOOR_COL, DOOR_ROW, ROOM_COLS, ROOM_ROWS, tileX, tileY } from '../config';
 import { Rng } from '../core/rng';
+import { CROWD_STEPS, FlowField } from './flowField';
 import {
-  FlowField,
   type ObstacleGrid,
   allFloorReachable,
   cellCol,
   cellIndex,
+  CELLS,
   cellRow,
   emptyGrid,
   nearestOpen,
@@ -174,18 +175,40 @@ describe('FlowField', () => {
     expect(walker.distance(1, 1)).toBe(4);
     expect(flier.distance(1, 1)).toBe(2);
   });
+
+  it('goes around a crowd when the way around is short', () => {
+    // Open floor: straight from (1, 1) to (4, 1) is 3 steps, around (2, 1) and (3, 1) is 5.
+    const crowd = new Uint8Array(CELLS);
+    crowd[cellIndex(2, 1)] = 1;
+    const field = new FlowField();
+    field.build(emptyGrid(), false, 4, 1, crowd);
+    expect(field.distance(1, 1)).toBe(5);
+    expect(field.next(1, 1)).toBe(cellIndex(1, 2));
+  });
+
+  it('queues behind a crowd in a corridor with no way around', () => {
+    // Rock above and below row 2 from column 1 to 6: a one-cell corridor.
+    const corridor = gridOf(['######', '......', '######']);
+    const crowd = new Uint8Array(CELLS);
+    crowd[cellIndex(3, 2)] = 1;
+    const field = new FlowField();
+    field.build(corridor, false, 6, 2, crowd);
+    expect(field.next(2, 2)).toBe(cellIndex(3, 2));
+    expect(field.distance(2, 2)).toBe(4 + CROWD_STEPS);
+  });
 });
 
 describe('straightPath', () => {
+  const at = (col: number, row: number) => ({ x: tileX(col), y: tileY(row) });
   const grid = gridOf(['...', '.#.', '...']);
 
   it('is blocked by rock in the way', () => {
-    expect(straightPath(grid, false, tileX(1), tileY(2), tileX(3), tileY(2), 0)).toBe(false);
+    expect(straightPath(grid, false, at(1, 2), at(3, 2), 0)).toBe(false);
   });
 
   it('is clear beside it, unless the body is too wide', () => {
-    expect(straightPath(grid, false, tileX(1), tileY(1), tileX(3), tileY(1), 10)).toBe(true);
-    expect(straightPath(grid, false, tileX(1), tileY(1), tileX(3), tileY(1), 30)).toBe(false);
+    expect(straightPath(grid, false, at(1, 1), at(3, 1), 10)).toBe(true);
+    expect(straightPath(grid, false, at(1, 1), at(3, 1), 30)).toBe(false);
   });
 });
 

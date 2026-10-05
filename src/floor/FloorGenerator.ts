@@ -84,21 +84,32 @@ function tryGenerateSize(rng: Rng, size: number): Floor | null {
   return null;
 }
 
+/** Returns a floor only when growth reaches the target size and leaves at least two true dead ends. */
 function tryGenerate(rng: Rng, target: number): Floor | null {
-  const cx = Math.floor(FLOOR_GRID_W / 2);
-  const cy = Math.floor(FLOOR_GRID_H / 2);
+  const { rooms, start, deadEnds } = growLayout(rng, target);
+  // A room can be marked dead-end and later gain a neighbor; recheck.
+  const realDeadEnds = deadEnds.filter((r) => occupiedNeighbors(rooms, r.x, r.y) === 1);
+  if (rooms.size < target || realDeadEnds.length < 2) return null;
+  placeSpecialRooms(start, realDeadEnds);
+  return new Floor(rooms, start);
+}
+
+/** Counts occupied cardinal neighbors so growth cannot join an existing branch into a loop. */
+function occupiedNeighbors(rooms: ReadonlyMap<string, RoomNode>, x: number, y: number): number {
+  return Object.values(DIRS).filter(({ dx, dy }) => rooms.has(key(x + dx, y + dy))).length;
+}
+
+/** Rooms grown breadth-first from the center, and those that grew nothing further. */
+function growLayout(rng: Rng, target: number) {
   const rooms = new Map<string, RoomNode>();
   const deadEnds: RoomNode[] = [];
-
   const add = (x: number, y: number, depth: number): RoomNode => {
     const room: RoomNode = { x, y, type: 'normal', depth, visited: false, cleared: false, itemTaken: false };
     rooms.set(key(x, y), room);
     return room;
   };
-  const occupiedNeighbors = (x: number, y: number) =>
-    Object.values(DIRS).filter(({ dx, dy }) => rooms.has(key(x + dx, y + dy))).length;
 
-  const start = add(cx, cy, 0);
+  const start = add(Math.floor(FLOOR_GRID_W / 2), Math.floor(FLOOR_GRID_H / 2), 0);
   start.type = 'start';
   const queue: RoomNode[] = [start];
   const grow = (room: RoomNode) => {
@@ -108,7 +119,7 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
       if (nx < 0 || ny < 0 || nx >= FLOOR_GRID_W || ny >= FLOOR_GRID_H) continue;
       if (rooms.has(key(nx, ny))) continue;
       if (rooms.size >= target) continue;
-      if (occupiedNeighbors(nx, ny) > 1) continue;
+      if (occupiedNeighbors(rooms, nx, ny) > 1) continue;
       if (rng.chance(0.5)) continue;
 
       queue.push(add(nx, ny, room.depth + 1));
@@ -121,11 +132,11 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
     grow(room);
     if (rooms.size === sizeBefore && room !== start) deadEnds.push(room);
   }
+  return { rooms, start, deadEnds };
+}
 
-  // A room can be marked dead-end and later gain a neighbor; recheck.
-  const realDeadEnds = deadEnds.filter((r) => occupiedNeighbors(r.x, r.y) === 1);
-  if (rooms.size < target || realDeadEnds.length < 2) return null;
-
+/** Boss on the deepest dead end, treasure on the shallowest, a shop between when one is spare. */
+function placeSpecialRooms(start: RoomNode, realDeadEnds: RoomNode[]) {
   realDeadEnds.sort((a, b) => b.depth - a.depth);
   realDeadEnds[0].type = 'boss';
   const treasure = realDeadEnds[realDeadEnds.length - 1];
@@ -139,5 +150,4 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
   start.cleared = true;
   treasure.cleared = true;
   if (shop) shop.cleared = true;
-  return new Floor(rooms, start);
 }
