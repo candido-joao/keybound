@@ -224,7 +224,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const center = this.aim + directionOffset(d);
       const count = shotsInDirection(d, s.shotCount, s.echoShots);
       const damage = d === 0 ? s.damage : s.damage * s.echoDamage;
-      for (let i = 0; i < count; i++) bolts.push(bolt(fanAngle(center, i, count, s.spread), damage, center));
+      const fan = Array.from({ length: count }, (_, i) => bolt(fanAngle(center, i, count, s.spread), damage, center));
+      bolts.push(...fan);
     }
     return bolts;
   }
@@ -270,14 +271,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return firing ? CONTINUOUS_BEAM : null;
     }
     if (firing) {
-      if (this.chargeStartAt < 0) this.chargeStartAt = time;
-      this.showChargeStage(chargeStage(this.chargeShare(time)), time);
+      this.holdCharge(time);
       return null;
     }
     if (this.chargeStartAt < 0) return null;
     const power = releasePower(this.chargeShare(time));
     this.endCharge();
     return power > 0 ? { power, continuous: false } : null;
+  }
+
+  private holdCharge(time: number) {
+    if (this.chargeStartAt < 0) this.chargeStartAt = time;
+    this.showChargeStage(chargeStage(this.chargeShare(time)), time);
   }
 
   private chargeShare(time: number): number {

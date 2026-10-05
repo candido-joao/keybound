@@ -1,12 +1,16 @@
 import type Phaser from 'phaser';
-import { DOOR_COL, ROOM_COLS, ROOM_ROWS, TILE, tileX, tileY } from '../config';
+import { DOOR_COL, ROOM_COLS, TILE, tileX, tileY } from '../config';
 import type { Enemy, Point } from '../entities/Enemy';
 import {
   FlowField,
+  INTERIOR_CELLS,
   PIT_PARTS,
+  PIT_QUARTERS,
   type ObstacleGrid,
   blocksAnyone,
+  cellCol,
   cellIndex,
+  cellRow,
   colAt,
   emptyGrid,
   nearestOpen,
@@ -56,9 +60,7 @@ export class RoomObstacles {
     this.clear();
     this.grid = grid ?? emptyGrid();
     this.rubbleColor = phase.palette.wallEdge;
-    for (let row = 1; row < ROOM_ROWS - 1; row++) {
-      for (let col = 1; col < ROOM_COLS - 1; col++) this.place(col, row, phase);
-    }
+    for (const cell of INTERIOR_CELLS) this.place(cellCol(cell), cellRow(cell), phase);
     this.steering = blocksAnyone(this.grid);
     this.targetCell = -1;
   }
@@ -73,10 +75,7 @@ export class RoomObstacles {
     const x = tileX(col);
     const y = tileY(row);
     if (def.solid) {
-      const rock = this.solid.create(x, y, texture) as Phaser.Physics.Arcade.Sprite;
-      // Turned to face the room's middle, like the layout mirrored around it.
-      rock.setDepth(1).setFlipX(col > DOOR_COL);
-      if (def.breakable) this.breakables.set(cellIndex(col, row), rock);
+      this.placeRock(col, row, texture, def.breakable);
       return;
     }
     if (def.blocksWalk) {
@@ -84,6 +83,13 @@ export class RoomObstacles {
       return;
     }
     this.decor.push(this.scene.add.image(x, y, texture).setDepth(0.5));
+  }
+
+  private placeRock(col: number, row: number, texture: string, breakable: boolean) {
+    const rock = this.solid.create(tileX(col), tileY(row), texture) as Phaser.Physics.Arcade.Sprite;
+    // Turned to face the room's middle, like the layout mirrored around it.
+    rock.setDepth(1).setFlipX(col > DOOR_COL);
+    if (breakable) this.breakables.set(cellIndex(col, row), rock);
   }
 
   /** The body covers the tile; four quarter pieces draw it, so touching pits read as one hole. */
@@ -94,13 +100,14 @@ export class RoomObstacles {
     body.setDepth(0.5);
     if (!this.scene.textures.exists(PIT_PARTS)) return;
     body.setVisible(false);
+    for (const [dx, dy] of PIT_QUARTERS) this.placePitPiece(col, row, dx, dy);
+  }
+
+  private placePitPiece(col: number, row: number, dx: number, dy: number) {
     const offset = TILE / 4;
-    for (const dy of [-1, 1]) {
-      for (const dx of [-1, 1]) {
-        const frame = pitFrame(pitPiece(this.grid, col, row, dx, dy), dx, dy);
-        this.decor.push(this.scene.add.image(x + dx * offset, y + dy * offset, PIT_PARTS, frame).setDepth(0.5));
-      }
-    }
+    const frame = pitFrame(pitPiece(this.grid, col, row, dx, dy), dx, dy);
+    const piece = this.scene.add.image(tileX(col) + dx * offset, tileY(row) + dy * offset, PIT_PARTS, frame);
+    this.decor.push(piece.setDepth(0.5));
   }
 
   private clear() {

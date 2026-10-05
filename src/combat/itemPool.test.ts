@@ -110,12 +110,10 @@ describe('rollRewards copy limits', () => {
   });
 
   it('keeps offering it below the limit', () => {
-    const offered = new Set<string>();
-    for (let i = 0; i < 50; i++) {
-      for (const r of rollRewards(new Rng(`l${i}`), [A, CAPPED, CAPPED_VARIANT], [CAPPED], 2, 1)) {
-        offered.add(r.base ?? r.id);
-      }
-    }
+    const rolls = Array.from({ length: 50 }, (_, i) =>
+      rollRewards(new Rng(`l${i}`), [A, CAPPED, CAPPED_VARIANT], [CAPPED], 2, 1),
+    );
+    const offered = new Set(rolls.flat().map((r) => r.base ?? r.id));
     expect(offered.has('capped')).toBe(true);
   });
 });

@@ -56,11 +56,16 @@ export function inSwing(dx: number, dy: number, aim: number, radius = 0): boolea
 export function swingTouchesBox(dx: number, dy: number, aim: number, halfW: number, halfH: number): boolean {
   for (let i = 0; i <= FAN_STEPS; i++) {
     const angle = aim - SWING.arc / 2 + (SWING.arc * i) / FAN_STEPS;
-    for (const share of FAN_DEPTHS) {
-      const x = Math.cos(angle) * SWING.reach * share;
-      const y = Math.sin(angle) * SWING.reach * share;
-      if (Math.abs(x - dx) <= halfW && Math.abs(y - dy) <= halfH) return true;
-    }
+    if (rayTouchesBox(angle, dx, dy, halfW, halfH)) return true;
+  }
+  return false;
+}
+
+function rayTouchesBox(angle: number, dx: number, dy: number, halfW: number, halfH: number): boolean {
+  for (const share of FAN_DEPTHS) {
+    const x = Math.cos(angle) * SWING.reach * share;
+    const y = Math.sin(angle) * SWING.reach * share;
+    if (Math.abs(x - dx) <= halfW && Math.abs(y - dy) <= halfH) return true;
   }
   return false;
 }

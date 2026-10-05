@@ -16,6 +16,7 @@ import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
 import {
   PIT_PARTS,
   PIT_PIECES,
+  PIT_QUARTERS,
   type PitPiece,
   obstacleArtFiles,
   obstacleDef,
@@ -136,15 +137,7 @@ export class BootScene extends Phaser.Scene {
 
     bakeMissing(obstacleDef('spikes').texture, TILE, TILE, () => {
       // No plate: staggered rows of points coming straight out of the floor, each over its hole.
-      for (let row = 0; row < 4; row++) {
-        const shift = row % 2 === 0 ? 0 : 7;
-        for (let x = 10 + shift; x < TILE - 4; x += 14) {
-          const y = 14 + row * 10;
-          g.fillStyle(0x07060d, 0.7).fillEllipse(x, y, 11, 4);
-          g.fillStyle(0x6b6f80).fillTriangle(x - 4, y, x + 4, y, x, y - 12);
-          g.fillStyle(0xcfd6e6).fillTriangle(x - 1, y - 1, x + 1, y - 1, x, y - 11);
-        }
-      }
+      for (let row = 0; row < 4; row++) drawSpikeRow(g, row);
     });
 
     bake('door', TILE, TILE, () => {
@@ -193,16 +186,11 @@ export class BootScene extends Phaser.Scene {
     });
 
     // Enemies without art yet, the Colossi among them, get the placeholder body.
-    const { size, body, horns, eyes, eyeRadius } = PLACEHOLDER_BODY;
+    const { size } = PLACEHOLDER_BODY;
     for (const def of ENEMIES) {
       if (this.textures.exists(def.texture)) continue;
       const colors = placeholderColors(def);
-      bake(def.texture, size, size, () => {
-        g.fillStyle(colors.body).fillEllipse(body.x, body.y, body.w, body.h);
-        for (const h of horns) g.fillTriangle(h[0], h[1], h[2], h[3], h[4], h[5]);
-        g.fillStyle(colors.eye);
-        for (const [x, y] of eyes) g.fillCircle(x, y, eyeRadius);
-      });
+      bake(def.texture, size, size, () => drawPlaceholder(g, colors));
     }
     if (!this.textures.exists(BONE_PILE)) {
       bake(BONE_PILE, 32, 32, () => {
@@ -360,15 +348,10 @@ export class BootScene extends Phaser.Scene {
     const half = TILE / 2;
     const source = this.textures.get(obstacleDef('pit').texture).getSourceImage() as CanvasImageSource;
     const sheet = this.textures.createCanvas(PIT_PARTS, half * PIT_PIECES.length * 4, half)!;
-    let x = 0;
-    for (const piece of PIT_PIECES) {
-      for (const dy of [-1, 1]) {
-        for (const dx of [-1, 1]) {
-          drawPitPiece(sheet.context, source, piece, dx, dy, x);
-          sheet.add(pitFrame(piece, dx, dy), 0, x, 0, half, half);
-          x += half;
-        }
-      }
+    const cuts = PIT_PIECES.flatMap((piece) => PIT_QUARTERS.map(([dx, dy]) => ({ piece, dx, dy })));
+    for (const [i, { piece, dx, dy }] of cuts.entries()) {
+      drawPitPiece(sheet.context, source, piece, dx, dy, i * half);
+      sheet.add(pitFrame(piece, dx, dy), 0, i * half, 0, half, half);
     }
     sheet.refresh();
   }
@@ -414,6 +397,25 @@ export class BootScene extends Phaser.Scene {
     }
     this.scene.start('game', runFromParams(params));
   }
+}
+
+/** One staggered row of spike points, each over its hole. */
+function drawSpikeRow(g: Phaser.GameObjects.Graphics, row: number) {
+  const shift = row % 2 === 0 ? 0 : 7;
+  const y = 14 + row * 10;
+  for (let x = 10 + shift; x < TILE - 4; x += 14) {
+    g.fillStyle(0x07060d, 0.7).fillEllipse(x, y, 11, 4);
+    g.fillStyle(0x6b6f80).fillTriangle(x - 4, y, x + 4, y, x, y - 12);
+    g.fillStyle(0xcfd6e6).fillTriangle(x - 1, y - 1, x + 1, y - 1, x, y - 11);
+  }
+}
+
+function drawPlaceholder(g: Phaser.GameObjects.Graphics, colors: { body: number; eye: number }) {
+  const { body, horns, eyes, eyeRadius } = PLACEHOLDER_BODY;
+  g.fillStyle(colors.body).fillEllipse(body.x, body.y, body.w, body.h);
+  for (const h of horns) g.fillTriangle(h[0], h[1], h[2], h[3], h[4], h[5]);
+  g.fillStyle(colors.eye);
+  for (const [x, y] of eyes) g.fillCircle(x, y, eyeRadius);
 }
 
 /** Rock left in the corner where an L of pits turns around a floor tile. */

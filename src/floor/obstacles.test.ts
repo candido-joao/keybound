@@ -5,7 +5,9 @@ import {
   FlowField,
   type ObstacleGrid,
   allFloorReachable,
+  cellCol,
   cellIndex,
+  cellRow,
   emptyGrid,
   nearestOpen,
   obstacleArt,
@@ -19,6 +21,9 @@ import {
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => `ROCK${i}`);
 const roll = (seed: string) => rollObstacles(new Rng(seed));
+const ALL_CELLS = emptyGrid().map((_, cell) => cell);
+/** Cells in `cells` that hold an obstacle. */
+const taken = (grid: ObstacleGrid, cells: number[]) => cells.filter((cell) => grid[cell] !== null);
 
 /** A grid from rows of text: '.' open, '#' rock, 'o' pit, '^' spikes; walls around it are implied. */
 function gridOf(rows: string[]): ObstacleGrid {
@@ -39,19 +44,17 @@ describe('rollObstacles', () => {
 
   it('keeps the cross through the doors open', () => {
     for (const seed of SEEDS) {
-      const grid = roll(seed);
-      for (let col = 0; col < ROOM_COLS; col++) expect(grid[cellIndex(col, DOOR_ROW)]).toBeNull();
-      for (let row = 0; row < ROOM_ROWS; row++) expect(grid[cellIndex(DOOR_COL, row)]).toBeNull();
+      const cross = ALL_CELLS.filter((cell) => cellCol(cell) === DOOR_COL || cellRow(cell) === DOOR_ROW);
+      expect(taken(roll(seed), cross)).toEqual([]);
     }
   });
 
   it('keeps the altar off the way: the top door is reached without it or spikes', () => {
     for (const seed of SEEDS) {
-      const grid = roll(seed);
       // A walker that may only use open cells, never the altar's.
+      const grid = roll(seed).map((id) => (id === 'spikes' ? 'rock' : id));
       const field = new FlowField();
       grid[cellIndex(DOOR_COL, ALTAR_ROW)] = 'rock';
-      for (let i = 0; i < grid.length; i++) if (grid[i] === 'spikes') grid[i] = 'rock';
       field.build(grid, false, DOOR_COL, 1);
       expect(field.distance(DOOR_COL, DOOR_ROW)).toBeGreaterThan(0);
     }
@@ -63,11 +66,8 @@ describe('rollObstacles', () => {
 
   it('leaves the wall ring alone', () => {
     for (const seed of SEEDS) {
-      const grid = roll(seed);
-      for (let col = 0; col < ROOM_COLS; col++) {
-        expect(grid[cellIndex(col, 0)]).toBeNull();
-        expect(grid[cellIndex(col, ROOM_ROWS - 1)]).toBeNull();
-      }
+      const ends = ALL_CELLS.filter((cell) => cellRow(cell) === 0 || cellRow(cell) === ROOM_ROWS - 1);
+      expect(taken(roll(seed), ends)).toEqual([]);
     }
   });
 
@@ -82,14 +82,14 @@ describe('rollObstacles', () => {
       const grid = roll(seed);
       // Cracks are rolled per rock after mirroring; the layout under them is what's mirrored.
       const at = (c: number, r: number) => (grid[cellIndex(c, r)] === 'cracked' ? 'rock' : grid[cellIndex(c, r)]);
-      let acrossX = true;
-      let acrossY = true;
-      for (let r = 0; r < ROOM_ROWS; r++) {
-        for (let c = 0; c < ROOM_COLS; c++) {
-          if (at(c, r) !== at(ROOM_COLS - 1 - c, r)) acrossX = false;
-          if (at(c, r) !== at(c, ROOM_ROWS - 1 - r)) acrossY = false;
-        }
-      }
+      const acrossX = ALL_CELLS.every((cell) => {
+        const [c, r] = [cellCol(cell), cellRow(cell)];
+        return at(c, r) === at(ROOM_COLS - 1 - c, r);
+      });
+      const acrossY = ALL_CELLS.every((cell) => {
+        const [c, r] = [cellCol(cell), cellRow(cell)];
+        return at(c, r) === at(c, ROOM_ROWS - 1 - r);
+      });
       expect(acrossX || acrossY).toBe(true);
     }
   });

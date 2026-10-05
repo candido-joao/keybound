@@ -134,12 +134,13 @@ export function obstacleArt(def: ObstacleDef, phaseId: string, variant = 0): str
 /** Every obstacle texture key with its art file, each once. */
 export function obstacleArtFiles(phaseIds: readonly string[]): Map<string, string> {
   const files = new Map<string, string>();
-  for (const def of OBSTACLES) {
-    for (const phaseId of phaseIds) {
-      for (let v = 0; v < def.variants; v++) files.set(obstacleTexture(def, phaseId, v), obstacleArt(def, phaseId, v));
-    }
-  }
+  const looks = OBSTACLES.flatMap((def) => phaseIds.map((phaseId) => ({ def, phaseId })));
+  for (const { def, phaseId } of looks) addVariantArt(files, def, phaseId);
   return files;
+}
+
+function addVariantArt(files: Map<string, string>, def: ObstacleDef, phaseId: string) {
+  for (let v = 0; v < def.variants; v++) files.set(obstacleTexture(def, phaseId, v), obstacleArt(def, phaseId, v));
 }
 
 /** Creates a fresh room-sized grid, including the wall ring, with every cell set to open floor. */
@@ -150,6 +151,17 @@ export function emptyGrid(): ObstacleGrid {
 function interior(col: number, row: number): boolean {
   return col >= 1 && row >= 1 && col <= ROOM_COLS - 2 && row <= ROOM_ROWS - 2;
 }
+
+export const cellCol = (cell: number) => cell % ROOM_COLS;
+export const cellRow = (cell: number) => Math.floor(cell / ROOM_COLS);
+
+const ALL_CELLS = Array.from({ length: CELLS }, (_, cell) => cell);
+
+/** Every cell inside the walls, row by row: walking the floor is one loop and allocates nothing. */
+export const INTERIOR_CELLS: readonly number[] = ALL_CELLS.filter((cell) => interior(cellCol(cell), cellRow(cell)));
+
+/** The wall ring, doors' places included, row by row. */
+export const WALL_CELLS: readonly number[] = ALL_CELLS.filter((cell) => !interior(cellCol(cell), cellRow(cell)));
 
 /** Whether a body on foot (or a flier) can stand on this cell. Walls and out of range never. */
 export function passable(grid: ObstacleGrid, col: number, row: number, flying: boolean): boolean {
@@ -278,7 +290,7 @@ function rollQuarter(rng: Rng): Placed[] {
     const id = pickKind(rng);
     const overlaps = shape.some(([x, y]) => placed.some((p) => p.col === col + x && p.row === row + y));
     if (overlaps) continue;
-    for (const [x, y] of shape) placed.push({ col: col + x, row: row + y, id });
+    placed.push(...shape.map(([x, y]) => ({ col: col + x, row: row + y, id })));
   }
   return placed;
 }
@@ -302,27 +314,21 @@ export function allFloorReachable(grid: ObstacleGrid): boolean {
     interior(col, row) && grid[cellIndex(col, row)] === null && !(col === DOOR_COL && row === ALTAR_ROW);
   const seen = new Set<number>([cellIndex(DOOR_COL, DOOR_ROW)]);
   const queue = [cellIndex(DOOR_COL, DOOR_ROW)];
+  const visit = (col: number, row: number) => {
+    if (!clear(col, row) || seen.has(cellIndex(col, row))) return;
+    seen.add(cellIndex(col, row));
+    queue.push(cellIndex(col, row));
+  };
   while (queue.length > 0) {
     const cell = queue.pop()!;
-    const col = cell % ROOM_COLS;
-    const row = (cell - col) / ROOM_COLS;
-    for (const [c, r] of [
-      [col + 1, row],
-      [col - 1, row],
-      [col, row + 1],
-      [col, row - 1],
-    ]) {
-      if (!clear(c, r) || seen.has(cellIndex(c, r))) continue;
-      seen.add(cellIndex(c, r));
-      queue.push(cellIndex(c, r));
-    }
+    const col = cellCol(cell);
+    const row = cellRow(cell);
+    visit(col + 1, row);
+    visit(col - 1, row);
+    visit(col, row + 1);
+    visit(col, row - 1);
   }
-  for (let row = 1; row < ROOM_ROWS - 1; row++) {
-    for (let col = 1; col < ROOM_COLS - 1; col++) {
-      if (clear(col, row) && !seen.has(cellIndex(col, row))) return false;
-    }
-  }
-  return true;
+  return INTERIOR_CELLS.every((cell) => !clear(cellCol(cell), cellRow(cell)) || seen.has(cell));
 }
 
 /**
@@ -417,14 +423,14 @@ export function straightPath(
 export function nearestOpen(grid: ObstacleGrid, col: number, row: number): { col: number; row: number } {
   let best = { col: DOOR_COL, row: DOOR_ROW };
   let bestD = Infinity;
-  for (let r = 1; r < ROOM_ROWS - 1; r++) {
-    for (let c = 1; c < ROOM_COLS - 1; c++) {
-      if (grid[cellIndex(c, r)] !== null) continue;
-      const d = Math.abs(c - col) + Math.abs(r - row);
-      if (d >= bestD) continue;
-      best = { col: c, row: r };
-      bestD = d;
-    }
+  for (const cell of INTERIOR_CELLS) {
+    if (grid[cell] !== null) continue;
+    const c = cellCol(cell);
+    const r = cellRow(cell);
+    const d = Math.abs(c - col) + Math.abs(r - row);
+    if (d >= bestD) continue;
+    best = { col: c, row: r };
+    bestD = d;
   }
   return best;
 }
@@ -436,6 +442,14 @@ export function nearestOpen(grid: ObstacleGrid, col: number, row: number): { col
 export type PitPiece = 'outer' | 'rimX' | 'rimY' | 'inner' | 'fill';
 
 export const PIT_PIECES: readonly PitPiece[] = ['outer', 'rimX', 'rimY', 'inner', 'fill'];
+
+/** A tile's four quarters, as the sides they lean to: `[dx, dy]`, top row first. */
+export const PIT_QUARTERS: readonly (readonly [number, number])[] = [
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
+];
 
 /** Texture BootScene cuts the pit art into, one frame per piece and quarter. */
 export const PIT_PARTS = 'obstacle-pit-parts';

@@ -137,8 +137,7 @@ describe('event tuning', () => {
 
 describe('miniBossDef names', () => {
   it('gives every enemy that can fill a room an elder name of its own', () => {
-    for (const phase of PHASES) {
-      for (const { def } of phase.enemies) expect(miniBossDef(def).name).not.toBe(def.name);
-    }
+    const defs = PHASES.flatMap((phase) => phase.enemies.map(({ def }) => def));
+    for (const def of defs) expect(miniBossDef(def).name).not.toBe(def.name);
   });
 });

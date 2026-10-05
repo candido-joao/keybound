@@ -179,6 +179,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return this.def.contactDamage;
   }
 
+  /** Stands still through the fury transition, then lets the fury loose. */
+  private holdForFury(time: number) {
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    if (time >= this.furyReadyAt) this.beginFury(time);
+  }
+
   /** Updates pursuit using game-clock time, yielding movement to spawning, knockback and attack phases. */
   chase(target: Phaser.GameObjects.Components.Transform, time: number) {
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -191,8 +197,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.updateExplode(target, time)) return;
 
     if (this.furyState === 'transition') {
-      body.setVelocity(0, 0);
-      if (time >= this.furyReadyAt) this.beginFury(time);
+      this.holdForFury(time);
       return;
     }
     if (time < this.knockedUntil) return;
@@ -260,16 +265,18 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private updateExplode(target: Phaser.GameObjects.Components.Transform, time: number): boolean {
     const attack = this.explodeAttack;
     if (!attack) return false;
-    if (this.fuseEndsAt !== Infinity) {
-      (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-      if (time < this.fuseEndsAt) return true;
-      this.fuseEndsAt = Infinity;
-      this.explode?.(this, attack);
-      return true;
-    }
+    if (this.fuseEndsAt !== Infinity) return this.burnFuse(attack, time);
     if (this.distanceTo(target) > attack.triggerDistance) return false;
     this.fuseEndsAt = time + attack.fuseMs;
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    return true;
+  }
+
+  private burnFuse(attack: ExplodeAttack, time: number): boolean {
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    if (time < this.fuseEndsAt) return true;
+    this.fuseEndsAt = Infinity;
+    this.explode?.(this, attack);
     return true;
   }
 
@@ -286,14 +293,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private updateVolley(target: Phaser.GameObjects.Components.Transform, time: number): boolean {
     const volley = this.volley;
     if (!volley || !this.rangeTrigger) return false;
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    if (this.volleyFireAt !== Infinity) {
-      body.setVelocity(0, 0);
-      this.placeEyes();
-      if (time < this.volleyFireAt) return true;
-      this.fireVolley(volley, target);
-      return true;
-    }
+    if (this.volleyFireAt !== Infinity) return this.holdVolley(volley, target, time);
     // A dash in progress (telegraph included) keeps movement; the wait still counts meanwhile.
     const ready = this.rangeTrigger.update(this.distanceTo(target), time);
     if (time < this.dashingUntil || !ready || time < this.nextVolleyAt) return false;
@@ -302,6 +302,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return false;
     }
     this.startVolley(volley, time);
+    return true;
+  }
+
+  /** Stands with glowing eyes until the orbs fly. */
+  private holdVolley(volley: VolleyAttack, target: Phaser.GameObjects.Components.Transform, time: number): boolean {
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.placeEyes();
+    if (time < this.volleyFireAt) return true;
+    this.fireVolley(volley, target);
     return true;
   }
 
@@ -336,26 +345,27 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private updateSummon(time: number): boolean {
     const summon = this.summonAttack;
     if (!summon) return false;
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    if (this.summonAt !== Infinity) {
-      body.setVelocity(0, 0);
-      if (time < this.summonAt) return true;
-      this.summonAt = Infinity;
-      this.summon?.(this, summon);
-      return true;
-    }
+    if (this.summonAt !== Infinity) return this.channelSummon(summon, time);
     // Never on top of a dash or a volley already under way.
     if (time < this.nextSummonAt || time < this.dashingUntil || this.volleyFireAt !== Infinity) return false;
 
     this.nextSummonAt = time + summon.everyMs;
     this.summonAt = time + summon.telegraphMs;
-    body.setVelocity(0, 0);
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.scene.tweens.add({
       targets: this,
       scaleY: this.def.scale * 1.2,
       duration: summon.telegraphMs / 2,
       yoyo: true,
     });
+    return true;
+  }
+
+  private channelSummon(summon: SummonAttack, time: number): boolean {
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    if (time < this.summonAt) return true;
+    this.summonAt = Infinity;
+    this.summon?.(this, summon);
     return true;
   }
 
@@ -391,15 +401,18 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (time < this.dashingUntil) return true;
     if (time < this.nextDashAt) return false;
     if (dash.maxDistance !== undefined && this.distanceTo(target) > dash.maxDistance) return false;
-    if (dash.align !== undefined) {
-      // Not lined up yet: keep walking, ready to go the moment it is.
-      this.lungeAxis = alignedAxis(target.x - this.x, target.y - this.y, dash.align);
-      if (!this.lungeAxis) return false;
-    }
+    if (!this.linedUp(dash, target)) return false;
 
     this.nextDashAt = time + dash.everyMs;
     this.telegraphDash(dash, target, time);
     return true;
+  }
+
+  /** Not lined up yet: keep walking, ready to go the moment it is. */
+  private linedUp(dash: DashAttack, target: Phaser.GameObjects.Components.Transform): boolean {
+    if (dash.align === undefined) return true;
+    this.lungeAxis = alignedAxis(target.x - this.x, target.y - this.y, dash.align);
+    return this.lungeAxis !== undefined;
   }
 
   /** An axis lunge stops at the first wall it runs into. */

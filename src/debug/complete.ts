@@ -47,9 +47,11 @@ function completeWord(head: string, word: string, candidates: string[], pending:
 
 export function commonPrefix(words: readonly string[]): string {
   if (words.length === 0) return '';
-  let prefix = words[0];
-  for (const w of words) {
-    while (!w.startsWith(prefix)) prefix = prefix.slice(0, -1);
-  }
-  return prefix;
+  return words.reduce(sharedPrefix);
+}
+
+function sharedPrefix(a: string, b: string): string {
+  let n = 0;
+  while (n < a.length && a[n] === b[n]) n++;
+  return a.slice(0, n);
 }

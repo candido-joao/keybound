@@ -29,6 +29,8 @@ const PURE_LOGIC = [
   'src/wiki/catalog.ts',
 ];
 
+const LOOP = ':matches(ForStatement, ForOfStatement, ForInStatement, WhileStatement, DoWhileStatement)';
+
 export default defineConfig(
   { ignores: ['dist'] },
   js.configs.recommended,
@@ -39,6 +41,11 @@ export default defineConfig(
       'no-restricted-syntax': [
         'error',
         { selector: 'IfStatement[alternate]', message: 'Use guard clauses and early return instead of else.' },
+        {
+          selector: 'IfStatement IfStatement',
+          message: 'No if inside an if: extract a function or use a guard clause.',
+        },
+        { selector: `${LOOP} ${LOOP}`, message: 'No loop inside a loop: extract a function or walk a flat list.' },
       ],
       'no-restricted-properties': [
         'error',

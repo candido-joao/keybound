@@ -139,10 +139,25 @@ export class BeamWeapon {
       const y = d === 0 ? player.keyTipY : player.keyGripY + Math.sin(center) * reach;
       const share = d === 0 ? 1 : s.echoDamage;
       const count = shotsInDirection(d, s.shotCount, s.echoShots);
-      for (let i = 0; i < count; i++) {
-        const p = this.tracePath(x, y, fanAngle(center, i, count, s.spread), length, turn, share, 1, d, null);
-        if (p >= 0 && s.refract > 0) this.refract(p, length, turn, width);
-      }
+      this.traceFan(s, x, y, center, count, length, turn, share, d, width);
+    }
+  }
+
+  private traceFan(
+    s: PlayerStats,
+    x: number,
+    y: number,
+    center: number,
+    count: number,
+    length: number,
+    turn: number,
+    share: number,
+    group: number,
+    width: number,
+  ) {
+    for (let i = 0; i < count; i++) {
+      const p = this.tracePath(x, y, fanAngle(center, i, count, s.spread), length, turn, share, 1, group, null);
+      if (p >= 0 && s.refract > 0) this.refract(p, length, turn, width);
     }
   }
 
@@ -226,19 +241,34 @@ export class BeamWeapon {
       const onKey =
         segmentDistanceSq(enemy.x, enemy.y, player.keyGripX, player.keyGripY, player.keyTipX, player.keyTipY) <=
         keyReach * keyReach;
-      for (let p = 0; p < this.pathCount; p++) {
-        const group = this.groups[p];
-        if (!enemy.active || this.groupStamps[group] === e || this.skips[p] === enemy) continue;
-        const radius = (width * this.widths[p]) / 2 + body;
-        const touches =
-          (group === 0 && onKey) || pathTouches(this.paths[p], this.pointCounts[p], enemy.x, enemy.y, radius);
-        if (!touches) continue;
-        this.groupStamps[group] = e;
-        this.strike(player, enemy, damage * this.shares[p], knockback, now);
-      }
+      this.hitAlongPaths(player, e, onKey, width, damage, knockback, now);
     }
     this.nextTickAt += BEAM.tickMs;
     this.firstTick = false;
+  }
+
+  /** Strikes target `e` once for each beam group whose path touches it. */
+  private hitAlongPaths(
+    player: Player,
+    e: number,
+    onKey: boolean,
+    width: number,
+    damage: number,
+    knockback: number,
+    now: number,
+  ) {
+    const enemy = this.targets[e];
+    const body = ENEMY_RADIUS * enemy.def.scale;
+    for (let p = 0; p < this.pathCount; p++) {
+      const group = this.groups[p];
+      if (!enemy.active || this.groupStamps[group] === e || this.skips[p] === enemy) continue;
+      const radius = (width * this.widths[p]) / 2 + body;
+      const touches =
+        (group === 0 && onKey) || pathTouches(this.paths[p], this.pointCounts[p], enemy.x, enemy.y, radius);
+      if (!touches) continue;
+      this.groupStamps[group] = e;
+      this.strike(player, enemy, damage * this.shares[p], knockback, now);
+    }
   }
 
   private strike(player: Player, enemy: Enemy, damage: number, knockback: number, now: number) {

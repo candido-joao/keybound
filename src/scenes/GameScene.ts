@@ -65,7 +65,7 @@ import {
   twinDef,
 } from '../floor/roomEvents';
 import { startsLocked } from '../floor/locks';
-import { OBSTACLE_TUNING, rollObstacles } from '../floor/obstacles';
+import { INTERIOR_CELLS, OBSTACLE_TUNING, WALL_CELLS, cellCol, cellRow, rollObstacles } from '../floor/obstacles';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { pad } from '../input/touch';
 import { BeamWeapon } from './BeamWeapon';
@@ -484,7 +484,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     this.roomDecor.forEach((o) => o.destroy());
     this.roomDecor = [];
     this.pedestals = [];
-    for (const pile of this.piles) for (const part of pile.parts) part.destroy();
+    for (const part of this.piles.flatMap((pile) => pile.parts)) part.destroy();
     this.piles = [];
     this.walls.clear(true, true);
     this.doorBlocks.clear(true, true);
@@ -536,21 +536,18 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       return undefined;
     };
 
-    for (let row = 0; row < ROOM_ROWS; row++) {
-      for (let col = 0; col < ROOM_COLS; col++) {
-        const edge = row === 0 || col === 0 || row === ROOM_ROWS - 1 || col === ROOM_COLS - 1;
-        if (!edge) continue;
-
-        const door = doorAt(col, row);
-        if (!door) {
-          this.walls.create(tileX(col), tileY(row), wallTexture(this.phase)).setDepth(1);
-          continue;
-        }
-
-        const neighbor = this.floor.neighbor(room, door)!;
-        if (!room.cleared || neighbor.locked) this.closeDoor(door, col, row, neighbor);
-        this.roomDecor.push(this.doorMarker(col, row, door, neighbor));
+    for (const cell of WALL_CELLS) {
+      const col = cellCol(cell);
+      const row = cellRow(cell);
+      const door = doorAt(col, row);
+      if (!door) {
+        this.walls.create(tileX(col), tileY(row), wallTexture(this.phase)).setDepth(1);
+        continue;
       }
+
+      const neighbor = this.floor.neighbor(room, door)!;
+      if (!room.cleared || neighbor.locked) this.closeDoor(door, col, row, neighbor);
+      this.roomDecor.push(this.doorMarker(col, row, door, neighbor));
     }
   }
 
@@ -650,11 +647,11 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
 
   private cellsAwayFromPlayer(): { col: number; row: number }[] {
     const cells: { col: number; row: number }[] = [];
-    for (let row = 1; row < ROOM_ROWS - 1; row++) {
-      for (let col = 1; col < ROOM_COLS - 1; col++) {
-        const far = Phaser.Math.Distance.Between(tileX(col), tileY(row), this.player.x, this.player.y) > TILE * 3.5;
-        if (far && this.obstacles.isOpen(col, row)) cells.push({ col, row });
-      }
+    for (const cell of INTERIOR_CELLS) {
+      const col = cellCol(cell);
+      const row = cellRow(cell);
+      const far = Phaser.Math.Distance.Between(tileX(col), tileY(row), this.player.x, this.player.y) > TILE * 3.5;
+      if (far && this.obstacles.isOpen(col, row)) cells.push({ col, row });
     }
     return cells;
   }
@@ -826,7 +823,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const stomp = STOMP_RADIUS * STOMP_RADIUS;
     for (let i = this.piles.length - 1; i >= 0; i--) {
       const pile = this.piles[i];
-      const { image, parts, def } = pile;
+      const { image, parts } = pile;
       if (Phaser.Math.Distance.Squared(image.x, image.y, this.player.x, this.player.y) < stomp) {
         this.piles.splice(i, 1);
         this.crushPile(pile);
@@ -838,12 +835,17 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
       }
       if (time < pile.reviveAt) continue;
       this.piles.splice(i, 1);
-      this.tweens.killTweensOf(parts);
-      for (const part of parts) part.destroy();
-      const enemy = this.spawnEnemy(def, image.x, image.y, this.dropRng.next() * 1000);
-      enemy.hp = reviveHp(def.hp, def.revive!.hpShare);
-      enemy.revivals = pile.revivals + 1;
+      this.revivePile(pile);
     }
+  }
+
+  private revivePile(pile: Pile) {
+    const { image, parts, def } = pile;
+    this.tweens.killTweensOf(parts);
+    for (const part of parts) part.destroy();
+    const enemy = this.spawnEnemy(def, image.x, image.y, this.dropRng.next() * 1000);
+    enemy.hp = reviveHp(def.hp, def.revive!.hpShare);
+    enemy.revivals = pile.revivals + 1;
   }
 
   private crushPile(pile: Pile) {
@@ -1153,9 +1155,7 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
     const pickup = this.physics.add.overlap(this.player, pedestal, () => {
       const wallet = this.wallet();
       if (!canBuy(ware, wallet)) {
-        // Once per bump, not on every frame of it.
-        if (this.clock.now - refusedAt > REFUSE_FLASH_MS) this.refuse(label, icon);
-        refusedAt = this.clock.now;
+        refusedAt = this.refuseOnce(label, icon, refusedAt);
         return;
       }
       pickup.active = false;
@@ -1179,6 +1179,12 @@ export class GameScene extends Phaser.Scene implements EventHost, StrikeHost {
   }
 
   /** The price turns red and the ware shakes: the player can't pay, or it would do nothing. */
+  /** Flashes the refusal once per bump, not on every frame of it; returns the new bump time. */
+  private refuseOnce(label: Phaser.GameObjects.Text, icon: Phaser.GameObjects.Image, refusedAt: number): number {
+    if (this.clock.now - refusedAt > REFUSE_FLASH_MS) this.refuse(label, icon);
+    return this.clock.now;
+  }
+
   private refuse(label: Phaser.GameObjects.Text, icon: Phaser.GameObjects.Image) {
     label.setColor('#e8435a');
     this.time.delayedCall(REFUSE_FLASH_MS, () => label.active && label.setColor(COLORS.text));
