@@ -18,6 +18,8 @@ export const ROOM_Y = GAME_H - ROOM_H - 18;
 
 export const DOOR_COL = Math.floor(ROOM_COLS / 2);
 export const DOOR_ROW = Math.floor(ROOM_ROWS / 2);
+/** The altar event, and the pedestal it turns into: two tiles above the center. */
+export const ALTAR_ROW = DOOR_ROW - 2;
 
 export const FLOOR_GRID_W = 9;
 export const FLOOR_GRID_H = 8;
@@ -39,6 +41,7 @@ export const COLORS = {
   hpFrame: 0xf2c14e,
   boss: 0xe8435a,
   treasure: 0xffd23f,
+  shop: 0x4fd1a5,
   doorMarker: 0x6d64a0,
   curse: 0x9b4dff,
   text: '#e9e4ff',

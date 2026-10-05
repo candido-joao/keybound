@@ -136,6 +136,8 @@ export interface EnemyDef {
   anchored?: boolean;
   /** Drifts through other enemies. */
   ghost?: boolean;
+  /** Floats over pits and spikes; rock still stops it. */
+  flies?: boolean;
   /** Fades in and out; hidden, it neither hurts nor takes hits. */
   fade?: FadeCycle;
   blink?: BlinkMove;
@@ -224,6 +226,7 @@ export const LANTERN: EnemyDef = {
   boss: false,
   attacks: [],
   ghost: true,
+  flies: true,
   fade: { shownMs: 1800, hiddenMs: 1500, warnMs: 300 },
   deathColor: 0x5fbf7a,
 };
@@ -299,7 +302,8 @@ export const CRYSTAL_SHARD: EnemyDef = {
   hp: 4,
   hpGrowth: 0.15,
   speed: 165,
-  scale: 1,
+  // A piece of the sentinel: drawn smaller than what it broke off from.
+  scale: 0.65,
   spawnMs: 150,
   contactDamage: 6,
   boss: false,
@@ -456,38 +460,35 @@ export const ENEMIES: readonly EnemyDef[] = [
   GEAR_COLOSSUS,
 ];
 
-/** Who can fill a normal room, how often, and from which floor on. */
+/** Who can fill a normal room and how often; any of a phase's enemies can turn up on any of its floors. */
 export interface RoomEnemy {
   def: EnemyDef;
   weight: number;
-  minDepth: number;
 }
 
 export const CRYPT_ENEMIES: readonly RoomEnemy[] = [
-  { def: SHADOW, weight: 3, minDepth: 1 },
-  // Floor 1 stays melee only while the player learns to move and shoot.
-  { def: SHADOW_CASTER, weight: 1, minDepth: 2 },
-  { def: BONES, weight: 2, minDepth: 2 },
-  { def: LANTERN, weight: 1, minDepth: 3 },
+  { def: SHADOW, weight: 3 },
+  { def: SHADOW_CASTER, weight: 1 },
+  { def: BONES, weight: 2 },
+  { def: LANTERN, weight: 1 },
 ];
 
 export const GARDEN_ENEMIES: readonly RoomEnemy[] = [
-  { def: CRYSTAL_SENTINEL, weight: 3, minDepth: 1 },
-  { def: CRYSTAL_SEER, weight: 1, minDepth: 1 },
-  { def: CRYSTAL_SPIKE, weight: 1, minDepth: 5 },
+  { def: CRYSTAL_SENTINEL, weight: 3 },
+  { def: CRYSTAL_SEER, weight: 1 },
+  { def: CRYSTAL_SPIKE, weight: 1 },
 ];
 
 export const CLOCK_TOWER_ENEMIES: readonly RoomEnemy[] = [
-  { def: AUTOMATON, weight: 3, minDepth: 1 },
-  { def: AUTOMATON_GUNNER, weight: 1, minDepth: 1 },
-  { def: CUCKOO, weight: 1, minDepth: 8 },
+  { def: AUTOMATON, weight: 3 },
+  { def: AUTOMATON_GUNNER, weight: 1 },
+  { def: CUCKOO, weight: 1 },
 ];
 
-/** `count` enemy kinds from `table` for a room on floor `depth`, each rolled by weight among those allowed there. */
-export function rollRoomEnemies(rng: Rng, depth: number, count: number, table: readonly RoomEnemy[]): EnemyDef[] {
-  const allowed = table.filter((e) => depth >= e.minDepth);
-  if (allowed.length === 0) return [];
-  return Array.from({ length: count }, () => pickWeighted(rng, allowed).def);
+/** `count` enemy kinds from `table`, each rolled by weight. */
+export function rollRoomEnemies(rng: Rng, count: number, table: readonly RoomEnemy[]): EnemyDef[] {
+  if (table.length === 0) return [];
+  return Array.from({ length: count }, () => pickWeighted(rng, table).def);
 }
 
 /** Floor 1 uses the base HP; each floor after adds a fixed share of it. */

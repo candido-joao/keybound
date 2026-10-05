@@ -57,6 +57,8 @@ export interface BeamTrigger {
 
 const NO_SHOT: ShotOutput = { bolts: [], beam: null };
 const CONTINUOUS_BEAM: BeamTrigger = { power: 1, continuous: true };
+// Shared: a held beam asks for this every frame.
+const CONTINUOUS_SHOT: ShotOutput = { bolts: [], beam: CONTINUOUS_BEAM };
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
@@ -129,10 +131,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   move() {
-    const k = this.keys;
-    // Keys give full steps; the stick also gives partial ones, which walk slower.
-    const ix = clampAxis((k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0) + pad.moveX);
-    const iy = clampAxis((k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0) + pad.moveY);
+    const ix = this.walkX();
+    const iy = this.walkY();
     const len = Math.max(1, Math.hypot(ix, iy));
     const body = this.body as Phaser.Physics.Arcade.Body;
 
@@ -145,7 +145,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.moveX = ix;
     this.moveY = iy;
     if (!this.animated && ix !== 0) this.setFlipX(ix < 0);
-    this.setAlpha(this.invulnerable ? (Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1) : 1);
+    this.setAlpha(this.blinkAlpha());
+  }
+
+  /** WASD give full steps; the stick also gives partial ones, which walk slower. */
+  private walkX(): number {
+    return clampAxis((this.keys.D.isDown ? 1 : 0) - (this.keys.A.isDown ? 1 : 0) + pad.moveX);
+  }
+
+  private walkY(): number {
+    return clampAxis((this.keys.S.isDown ? 1 : 0) - (this.keys.W.isDown ? 1 : 0) + pad.moveY);
+  }
+
+  /** Flickers while invulnerable. */
+  private blinkAlpha(): number {
+    if (!this.invulnerable) return 1;
+    return Math.floor(this.clock.now / 80) % 2 ? 0.35 : 1;
   }
 
   /** Space or the touch swing button, once per press. Both are read so neither press lingers. */
@@ -166,7 +181,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
    * which reads the walk.
    */
   startSwing(): number {
-    const [sx, sy] = this.shootAxes();
+    const sx = this.shootX();
+    const sy = this.shootY();
     this.swingStartAt = this.clock.now;
     // The key stays where it swung: the swing becomes the aim until the next shot sets one.
     this.aim = swingDirection(sx, sy, this.moveX, this.moveY, axisAim(sx, sy) ?? this.aim);
@@ -174,22 +190,25 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   /** Arrow keys and the aim stick, each axis -1, 0 or 1. */
-  private shootAxes(): [number, number] {
-    const k = this.keys;
-    const sx = Math.sign((k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0) + pad.aimX);
-    const sy = Math.sign((k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0) + pad.aimY);
-    return [sx, sy];
+  private shootX(): number {
+    return Math.sign((this.keys.RIGHT.isDown ? 1 : 0) - (this.keys.LEFT.isDown ? 1 : 0) + pad.aimX);
+  }
+
+  private shootY(): number {
+    return Math.sign((this.keys.DOWN.isDown ? 1 : 0) - (this.keys.UP.isDown ? 1 : 0) + pad.aimY);
   }
 
   /** Arrow keys or the aim stick aim and fire. Returns what to spawn this frame. */
   tryShoot(time: number): ShotOutput {
-    const [sx, sy] = this.shootAxes();
+    const sx = this.shootX();
+    const sy = this.shootY();
     const firing = sx !== 0 || sy !== 0;
     this.aim = axisAim(sx, sy) ?? this.aim;
 
     const beam = this.stats.beam > 0 ? this.updateCharge(firing, time) : null;
     this.updateKeyWeapon();
     this.updateLook(firing);
+    if (beam === CONTINUOUS_BEAM) return CONTINUOUS_SHOT;
     if (this.stats.beam > 0) return beam ? { bolts: [], beam } : NO_SHOT;
     if (!firing || time < this.nextShotAt) return NO_SHOT;
     this.nextShotAt = time + this.stats.fireDelay;
@@ -224,7 +243,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const center = this.aim + directionOffset(d);
       const count = shotsInDirection(d, s.shotCount, s.echoShots);
       const damage = d === 0 ? s.damage : s.damage * s.echoDamage;
-      for (let i = 0; i < count; i++) bolts.push(bolt(fanAngle(center, i, count, s.spread), damage, center));
+      const fan = Array.from({ length: count }, (_, i) => bolt(fanAngle(center, i, count, s.spread), damage, center));
+      bolts.push(...fan);
     }
     return bolts;
   }
@@ -270,14 +290,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return firing ? CONTINUOUS_BEAM : null;
     }
     if (firing) {
-      if (this.chargeStartAt < 0) this.chargeStartAt = time;
-      this.showChargeStage(chargeStage(this.chargeShare(time)), time);
+      this.holdCharge(time);
       return null;
     }
     if (this.chargeStartAt < 0) return null;
     const power = releasePower(this.chargeShare(time));
     this.endCharge();
     return power > 0 ? { power, continuous: false } : null;
+  }
+
+  /** Marks the start of the hold and updates the charge stage shown to the player. */
+  private holdCharge(time: number) {
+    if (this.chargeStartAt < 0) this.chargeStartAt = time;
+    this.showChargeStage(chargeStage(this.chargeShare(time)), time);
   }
 
   private chargeShare(time: number): number {

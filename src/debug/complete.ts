@@ -45,11 +45,15 @@ function completeWord(head: string, word: string, candidates: string[], pending:
   return { completed: head + commonPrefix(matches), ghost, matches };
 }
 
+/** Longest prefix shared by every word, or `''` when there are none. */
 export function commonPrefix(words: readonly string[]): string {
   if (words.length === 0) return '';
-  let prefix = words[0];
-  for (const w of words) {
-    while (!w.startsWith(prefix)) prefix = prefix.slice(0, -1);
-  }
-  return prefix;
+  return words.reduce(sharedPrefix);
+}
+
+/** Longest prefix shared by two words. */
+function sharedPrefix(a: string, b: string): string {
+  let n = 0;
+  while (n < a.length && a[n] === b[n]) n++;
+  return a.slice(0, n);
 }

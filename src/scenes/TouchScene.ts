@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { COLORS } from '../config';
-import type { Stick } from '../input/pad';
+import { COLORS, GAME_H, GAME_W } from '../config';
+import type { Circle, Stick } from '../input/pad';
 import { PAD_LAYOUT, pad, usingTouch } from '../input/touch';
 import type { GameScene } from './GameScene';
 
@@ -10,46 +10,70 @@ const KNOB_RADIUS = 20;
 
 /**
  * Overlay launched with the HUD: feeds touches to the shared pad and draws the sticks and
- * the pause button. Scene-level pointer events only, so overlays above still get their taps.
+ * the pause button. Both happen over the whole screen, not just the canvas: on a phone wider
+ * than the game the thumbs rest in the black margins, and Phaser drops a touch that leaves
+ * its canvas, freezing the stick. Phaser still gets every touch, so overlays keep their taps.
  */
 export class TouchScene extends Phaser.Scene {
-  private graphics!: Phaser.GameObjects.Graphics;
+  private overlay!: HTMLCanvasElement;
+  private ctx!: CanvasRenderingContext2D;
   /** Pad state only changes on pointer events; the drawing follows on the next update. */
   private dirty = true;
   private shown = false;
   /** The swing button dims without charges; redrawn when that changes. */
   private drawnCharged = false;
+  /** Canvas placement the overlay and pad were last fitted to. */
+  private fitted = { x: NaN, y: NaN, width: NaN, height: NaN, screenW: NaN, screenH: NaN };
 
   constructor() {
     super('touch');
   }
 
+  /** Grabs the overlay canvas and wires pointer listeners on `window`, torn down on shutdown. */
   create() {
-    this.graphics = this.add.graphics();
+    this.overlay = document.getElementById('touch') as HTMLCanvasElement;
+    this.ctx = this.overlay.getContext('2d')!;
     this.dirty = true;
     this.shown = false;
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onDown(p));
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onMove(p));
-    this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onUp(p));
-    this.input.on('pointerupoutside', (p: Phaser.Input.Pointer) => this.onUp(p));
-    this.events.once('shutdown', () => pad.releaseAll());
+    this.fitted.width = NaN;
+    window.addEventListener('pointerdown', this.onDown);
+    window.addEventListener('pointermove', this.onMove);
+    window.addEventListener('pointerup', this.onUp);
+    window.addEventListener('pointercancel', this.onUp);
+    this.events.once('shutdown', () => {
+      window.removeEventListener('pointerdown', this.onDown);
+      window.removeEventListener('pointermove', this.onMove);
+      window.removeEventListener('pointerup', this.onUp);
+      window.removeEventListener('pointercancel', this.onUp);
+      pad.releaseAll();
+      this.clear();
+    });
   }
 
+  /** Consumes the pause tap, keeps the overlay fitted to the screen, and redraws if needed. */
   update() {
+    const game = this.scene.get('game') as GameScene;
+    // Taken here, inside the game loop, rather than in the DOM event.
+    if (pad.consume('pause')) game.requestPause();
+    this.fit();
     const show = usingTouch() && this.playable;
-    const charged = (this.scene.get('game') as GameScene).drive > 0;
+    const charged = game.drive > 0;
     if (charged !== this.drawnCharged) {
       this.drawnCharged = charged;
       this.dirty = true;
     }
-    if (show !== this.shown) {
-      this.shown = show;
-      this.graphics.setVisible(show);
-      this.dirty = true;
-    }
-    if (!show || !this.dirty) return;
+    if (show !== this.shown) this.setShown(show);
+    if (!this.dirty) return;
     this.dirty = false;
-    this.draw();
+    this.clear();
+    if (show) this.draw();
+  }
+
+  /** Tracks whether the pad is shown, releasing every touch the moment it hides. */
+  private setShown(show: boolean) {
+    this.shown = show;
+    if (!show) pad.releaseAll();
+    this.dirty = true;
   }
 
   /** Only during play, outside transitions, boss intros and overlays. */
@@ -59,27 +83,66 @@ export class TouchScene extends Phaser.Scene {
     );
   }
 
-  private onDown(p: Phaser.Input.Pointer) {
-    if (!p.wasTouch || !this.playable) return;
+  /** Presses the pad from a touch pointer, converting page coordinates to game ones. */
+  private readonly onDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch' || !this.playable) return;
+    pad.press(e.pointerId, this.scale.transformX(e.pageX), this.scale.transformY(e.pageY));
     this.dirty = true;
-    const button = pad.press(p.id, p.x, p.y);
-    if (button === 'pause') (this.scene.get('game') as GameScene).requestPause();
+  };
+
+  /** Drags the pad from a touch pointer move. */
+  private readonly onMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
+    pad.drag(e.pointerId, this.scale.transformX(e.pageX), this.scale.transformY(e.pageY));
+    this.dirty = true;
+  };
+
+  /** Releases by id for any pointer type: ids from a non-touch pointer simply match nothing held. */
+  private readonly onUp = (e: PointerEvent) => {
+    pad.release(e.pointerId);
+    this.dirty = true;
+  };
+
+  /** Matches the overlay to the screen and the pad to the margins whenever the canvas moves. */
+  private fit() {
+    const bounds = this.scale.canvasBounds;
+    const f = this.fitted;
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    const same =
+      f.x === bounds.x &&
+      f.y === bounds.y &&
+      f.width === bounds.width &&
+      f.height === bounds.height &&
+      f.screenW === screenW &&
+      f.screenH === screenH;
+    if (same || bounds.width === 0 || bounds.height === 0) return;
+    Object.assign(f, { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, screenW, screenH });
+    const dpr = window.devicePixelRatio || 1;
+    this.overlay.width = Math.round(screenW * dpr);
+    this.overlay.height = Math.round(screenH * dpr);
+    pad.setView({
+      left: this.scale.transformX(window.scrollX),
+      top: this.scale.transformY(window.scrollY),
+      right: this.scale.transformX(window.scrollX + screenW),
+      bottom: this.scale.transformY(window.scrollY + screenH),
+    });
+    this.dirty = true;
   }
 
-  private onMove(p: Phaser.Input.Pointer) {
-    if (!p.isDown) return;
-    pad.drag(p.id, p.x, p.y);
-    this.dirty = true;
+  /** Clears the whole overlay canvas, regardless of the transform left by the last draw. */
+  private clear() {
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.clearRect(0, 0, this.overlay.width, this.overlay.height);
   }
 
-  private onUp(p: Phaser.Input.Pointer) {
-    pad.release(p.id);
-    this.dirty = true;
-  }
-
+  /** Draws in game coordinates, scaled and placed like the canvas, margins included. */
   private draw() {
-    const g = this.graphics;
-    g.clear();
+    const f = this.fitted;
+    const dpr = this.overlay.width / f.screenW;
+    const sx = (dpr * f.width) / GAME_W;
+    const sy = (dpr * f.height) / GAME_H;
+    this.ctx.setTransform(sx, 0, 0, sy, dpr * (f.x - window.scrollX), dpr * (f.y - window.scrollY));
     this.drawStick(pad.move);
     this.drawStick(pad.aim);
     this.drawPause();
@@ -88,40 +151,58 @@ export class TouchScene extends Phaser.Scene {
 
   /** A small key across the button; faint while the drive is empty. */
   private drawSwing() {
-    const g = this.graphics;
-    const { x, y, r } = PAD_LAYOUT.buttons.swing;
+    const ctx = this.ctx;
+    const button = pad.button('swing');
+    const { x, y } = button;
     const alpha = this.drawnCharged ? RING_ALPHA * (pad.isHeld('swing') ? 2 : 1) : IDLE_ALPHA;
-    g.fillStyle(0x000000, alpha);
-    g.fillCircle(x, y, r);
-    g.lineStyle(2, COLORS.hpFrame, alpha * 2);
-    g.strokeCircle(x, y, r);
-    g.lineStyle(3, COLORS.hpFrame, alpha * 2);
-    g.strokeCircle(x - 9, y + 9, 5);
-    g.lineBetween(x - 5, y + 5, x + 11, y - 11);
-    g.lineBetween(x + 6, y - 6, x + 10, y - 2);
+    this.drawButton(button, alpha, COLORS.hpFrame);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x - 9, y + 9, 5, 0, Math.PI * 2);
+    ctx.moveTo(x - 5, y + 5);
+    ctx.lineTo(x + 11, y - 11);
+    ctx.moveTo(x + 6, y - 6);
+    ctx.lineTo(x + 10, y - 2);
+    ctx.stroke();
   }
 
+  /** Draws a stick's base ring and its knob offset. */
   private drawStick(stick: Stick) {
-    const g = this.graphics;
+    const ctx = this.ctx;
     const alpha = stick.active ? RING_ALPHA : IDLE_ALPHA;
-    g.lineStyle(3, COLORS.wallEdge, alpha * 2);
-    g.fillStyle(0x000000, alpha);
-    g.fillCircle(stick.baseX, stick.baseY, PAD_LAYOUT.radius);
-    g.strokeCircle(stick.baseX, stick.baseY, PAD_LAYOUT.radius);
-    g.fillStyle(COLORS.bolt, alpha * 2);
-    g.fillCircle(stick.baseX + stick.knobX, stick.baseY + stick.knobY, KNOB_RADIUS);
+    this.drawButton({ x: stick.baseX, y: stick.baseY, r: PAD_LAYOUT.radius }, alpha, COLORS.wallEdge, 3);
+    ctx.fillStyle = rgba(COLORS.bolt, alpha * 2);
+    ctx.beginPath();
+    ctx.arc(stick.baseX + stick.knobX, stick.baseY + stick.knobY, KNOB_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
   }
 
+  /** Draws the pause button with its two bars. */
   private drawPause() {
-    const g = this.graphics;
-    const { x, y, r } = PAD_LAYOUT.buttons.pause;
+    const ctx = this.ctx;
+    const button = pad.button('pause');
+    const { x, y } = button;
     const alpha = pad.isHeld('pause') ? RING_ALPHA * 2 : RING_ALPHA;
-    g.fillStyle(0x000000, alpha);
-    g.fillCircle(x, y, r);
-    g.lineStyle(2, COLORS.wallEdge, alpha * 2);
-    g.strokeCircle(x, y, r);
-    g.fillStyle(0xffffff, alpha * 2);
-    g.fillRect(x - 8, y - 9, 5, 18);
-    g.fillRect(x + 3, y - 9, 5, 18);
+    this.drawButton(button, alpha, COLORS.wallEdge);
+    ctx.fillStyle = rgba(0xffffff, alpha * 2);
+    ctx.fillRect(x - 8, y - 9, 5, 18);
+    ctx.fillRect(x + 3, y - 9, 5, 18);
   }
+
+  /** A dark disc with a ring; leaves the ring's stroke style set for any glyph on top. */
+  private drawButton({ x, y, r }: Circle, alpha: number, ring: number, lineWidth = 2) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = rgba(0x000000, alpha);
+    ctx.fill();
+    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = rgba(ring, alpha * 2);
+    ctx.stroke();
+  }
+}
+
+/** Converts a packed 0xRRGGBB color to a CSS canvas style, capping boosted opacity at 1. */
+function rgba(color: number, alpha: number): string {
+  return `rgba(${(color >> 16) & 0xff}, ${(color >> 8) & 0xff}, ${color & 0xff}, ${Math.min(1, alpha)})`;
 }

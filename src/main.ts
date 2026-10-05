@@ -30,7 +30,11 @@ const game = new Phaser.Game({
   },
   physics: {
     default: 'arcade',
-    arcade: { debug: new URLSearchParams(location.search).has('debug') },
+    arcade: {
+      debug: new URLSearchParams(location.search).has('debug'),
+      // A few hundred bodies at most: scanning them beats keeping a spatial tree, which allocates on every query.
+      useTree: false,
+    },
   },
   scene: [BootScene, TitleScene, GameScene, HudScene, TouchScene, PauseScene, SummaryScene, BossIntroScene],
 });

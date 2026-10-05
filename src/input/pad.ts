@@ -26,6 +26,14 @@ export interface PadLayout {
   buttons: Record<PadButton, Circle>;
 }
 
+/** The visible screen in game coordinates; wider than the game when it is letterboxed. */
+export interface View {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 const FREE = -1;
 
 /** Returns the other stick placement mode for the pause menu's two-option cycle. */
@@ -44,14 +52,22 @@ export class Stick {
   x = 0;
   y = 0;
 
-  readonly homeX: number;
-  readonly homeY: number;
+  homeX: number;
+  homeY: number;
 
   constructor(homeX: number, homeY: number) {
     this.homeX = homeX;
     this.homeY = homeY;
     this.baseX = homeX;
     this.baseY = homeY;
+  }
+
+  /** Moves the resting place; the stick must be released. */
+  setHome(x: number, y: number) {
+    this.homeX = x;
+    this.homeY = y;
+    this.baseX = x;
+    this.baseY = y;
   }
 
   get active(): boolean {
@@ -75,15 +91,41 @@ export class VirtualPad {
   mode: StickMode;
   readonly move: Stick;
   readonly aim: Stick;
+  private view: View;
+  /** The layout's buttons, with the swing button following the aim stick to the screen edge. */
+  private readonly buttons: Record<PadButton, Circle>;
   private readonly held: Record<PadButton, number> = { pause: FREE, map: FREE, swing: FREE };
   /** Presses not yet taken by `consume`, so a quick tap between two frames still counts. */
   private readonly tapped: Record<PadButton, boolean> = { pause: false, map: false, swing: false };
 
+  /** Starts the view at the layout's own bounds, until `setView` narrows it to the screen. */
   constructor(layout: PadLayout, mode: StickMode) {
     this.layout = layout;
     this.mode = mode;
     this.move = new Stick(layout.moveHome.x, layout.moveHome.y);
     this.aim = new Stick(layout.aimHome.x, layout.aimHome.y);
+    this.view = { left: 0, top: 0, right: layout.width, bottom: layout.height };
+    this.buttons = { ...layout.buttons };
+  }
+
+  /**
+   * Fits the pad to the visible screen: the sticks and the swing button keep their distance
+   * from the bottom corners, so on a wide phone they sit in the margin under the thumbs.
+   */
+  setView(view: View) {
+    const { moveHome, aimHome, buttons, width, height } = this.layout;
+    const dx = view.right - width;
+    const dy = view.bottom - height;
+    this.releaseAll();
+    this.view = view;
+    this.move.setHome(moveHome.x + view.left, moveHome.y + dy);
+    this.aim.setHome(aimHome.x + dx, aimHome.y + dy);
+    this.buttons.swing = { ...buttons.swing, x: buttons.swing.x + dx, y: buttons.swing.y + dy };
+  }
+
+  /** Where a button is on screen, for hit tests and drawing. */
+  button(button: PadButton): Circle {
+    return this.buttons[button];
   }
 
   /** A new touch: a button under it, else the stick on its half of the screen. Returns the button pressed. */
@@ -153,16 +195,18 @@ export class VirtualPad {
     return Math.abs(y) > Math.abs(x) ? Math.sign(y) : 0;
   }
 
+  /** The button, if any, under a point in game coordinates. */
   private buttonAt(x: number, y: number): PadButton | undefined {
-    const { buttons } = this.layout;
+    const { buttons } = this;
     return BUTTONS.find((b) => Math.hypot(x - buttons[b].x, y - buttons[b].y) <= buttons[b].r);
   }
 
   /** Floating sticks start under the thumb, kept whole on screen. */
   private placeBase(stick: Stick, x: number, y: number) {
-    const { radius, width, height } = this.layout;
-    stick.baseX = clamp(x, radius, width - radius);
-    stick.baseY = clamp(y, radius, height - radius);
+    const { radius } = this.layout;
+    const { left, top, right, bottom } = this.view;
+    stick.baseX = clamp(x, left + radius, right - radius);
+    stick.baseY = clamp(y, top + radius, bottom - radius);
   }
 
   private steer(stick: Stick, x: number, y: number) {

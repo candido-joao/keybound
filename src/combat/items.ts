@@ -1,15 +1,7 @@
-import type Phaser from 'phaser';
 import { type Item, type PlayerStats, baseId } from './stats';
 
 /** Loaded from public/items/<base id>.png by BootScene; variants look like their base, so the pedestal doesn't give them away. */
 export const itemTextureKey = (item: Item) => `item:${baseId(item)}`;
-
-/** Item icon at 1:1 scale; falls back to the placeholder orb tinted with the item's color. */
-export function addItemIcon(scene: Phaser.Scene, x: number, y: number, item: Item): Phaser.GameObjects.Image {
-  const key = itemTextureKey(item);
-  if (scene.textures.exists(key)) return scene.add.image(x, y, key);
-  return scene.add.image(x, y, 'item').setTint(item.color);
-}
 
 /** Pure items weigh 1 against their variants: a subtle variant 2, an extreme one 1. */
 const PURE = 1;
@@ -284,7 +276,7 @@ export const ITEMS: readonly Item[] = [
     }),
   },
   {
-    // About four shots' worth per beam, at twice the charge.
+    // About seven shots' worth per beam, at twice the charge.
     ...texts('arcane-beam:overcharged'),
     base: 'arcane-beam',
     weight: EXTREME,

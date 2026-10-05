@@ -12,8 +12,11 @@ export const BEAM = {
   continuousChargeMs: 500,
   durationMs: 400,
   tickMs: 100,
-  /** A full release deals this many shots' worth of damage, spread over its ticks. */
-  shotsPerBeam: 2.4,
+  /**
+   * A full release deals this many shots' worth of damage, spread over its ticks. The charge and
+   * the beam take about 2.4 shots' worth of time; the rest pays for not firing while charging.
+   */
+  shotsPerBeam: 4,
   /** A continuous beam's damage per second against the bolts it replaces. */
   continuousShare: 0.6,
   /** Reach as a share of the bolts' range: hits hard, so it has to be used up close. */
@@ -78,6 +81,15 @@ export interface Bounds {
   maxY: number;
 }
 
+/** Where a beam starts and how it goes: `turnPerPx` radians per px of bend toward its target. */
+export interface BeamRay {
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  turnPerPx: number;
+}
+
 /**
  * Writes the beam's path into `out` as x, y pairs and returns how many points it has.
  * Each step turns up to `turnPerPx` radians per px toward `aimAt`'s angle, if any, and the
@@ -85,19 +97,16 @@ export interface Bounds {
  */
 export function traceBeam(
   out: number[],
-  x: number,
-  y: number,
-  angle: number,
-  length: number,
-  turnPerPx: number,
+  ray: BeamRay,
   bounds: Bounds,
   aimAt?: (x: number, y: number) => number | undefined,
 ): number {
+  const { length, turnPerPx } = ray;
   const capacity = Math.floor(out.length / 2);
-  out[0] = x;
-  out[1] = y;
+  out[0] = ray.x;
+  out[1] = ray.y;
   let points = 1;
-  let heading = angle;
+  let heading = ray.angle;
   let travelled = 0;
   while (travelled < length && points < capacity) {
     const px = out[points * 2 - 2];

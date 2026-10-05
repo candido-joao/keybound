@@ -1,9 +1,11 @@
+import type { Rng } from '../core/rng';
 import type { RoomNode } from './FloorGenerator';
 
-/** The first floor teaches the swing; from here on treasure rooms are locked. */
-export const LOCK_FROM_DEPTH = 2;
+/** Odds that a treasure room or shop starts locked, on any floor. */
+export const LOCK_CHANCE = 0.5;
 
 /** Locked rooms open only to a key swing, which spends a drive charge. */
-export function startsLocked(room: Pick<RoomNode, 'type'>, depth: number): boolean {
-  return room.type === 'treasure' && depth >= LOCK_FROM_DEPTH;
+export function startsLocked(rng: Rng, room: Pick<RoomNode, 'type'>): boolean {
+  if (room.type !== 'treasure' && room.type !== 'shop') return false;
+  return rng.chance(LOCK_CHANCE);
 }

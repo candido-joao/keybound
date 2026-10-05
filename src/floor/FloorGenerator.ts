@@ -1,9 +1,10 @@
 import { FLOOR_GRID_H, FLOOR_GRID_W } from '../config';
 import type { Rng } from '../core/rng';
+import type { ObstacleGrid } from './obstacles';
 import type { RoomEventId } from './roomEvents';
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
-export type RoomType = 'start' | 'normal' | 'treasure' | 'boss';
+export type RoomType = 'start' | 'normal' | 'treasure' | 'boss' | 'shop';
 
 export const DIRS: Record<Dir, { dx: number; dy: number; opposite: Dir }> = {
   up: { dx: 0, dy: -1, opposite: 'down' },
@@ -28,6 +29,8 @@ export interface RoomNode {
   event?: RoomEventId;
   /** Every door into it stays shut until a key swing unlocks one; see `startsLocked`. */
   locked?: boolean;
+  /** Common rooms only; a cracked rock broken in it is gone for good. */
+  obstacles?: ObstacleGrid;
 }
 
 export class Floor {
@@ -67,63 +70,86 @@ export function generateFloor(rng: Rng, floorDepth: number): Floor {
 
   // A smaller floor beats a crashed run: shrink the target until one fits.
   for (let size = target; size >= MIN_ROOMS; size--) {
-    for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
-      const floor = tryGenerate(rng, size);
-      if (floor) return floor;
-    }
+    const floor = tryGenerateSize(rng, size);
+    if (floor) return floor;
   }
   throw new Error(`Floor generation failed (seed ${rng.seed}, depth ${floorDepth})`);
 }
 
+/** Retries `tryGenerate` at a fixed size until one lays out, or gives up. */
+function tryGenerateSize(rng: Rng, size: number): Floor | null {
+  for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
+    const floor = tryGenerate(rng, size);
+    if (floor) return floor;
+  }
+  return null;
+}
+
+/** Returns a floor only when growth reaches the target size and leaves at least two true dead ends. */
 function tryGenerate(rng: Rng, target: number): Floor | null {
-  const cx = Math.floor(FLOOR_GRID_W / 2);
-  const cy = Math.floor(FLOOR_GRID_H / 2);
+  const { rooms, start, deadEnds } = growLayout(rng, target);
+  // A room can be marked dead-end and later gain a neighbor; recheck.
+  const realDeadEnds = deadEnds.filter((r) => occupiedNeighbors(rooms, r.x, r.y) === 1);
+  if (rooms.size < target || realDeadEnds.length < 2) return null;
+  placeSpecialRooms(start, realDeadEnds);
+  return new Floor(rooms, start);
+}
+
+/** Counts occupied cardinal neighbors so growth cannot join an existing branch into a loop. */
+function occupiedNeighbors(rooms: ReadonlyMap<string, RoomNode>, x: number, y: number): number {
+  return Object.values(DIRS).filter(({ dx, dy }) => rooms.has(key(x + dx, y + dy))).length;
+}
+
+/** Rooms grown breadth-first from the center, and those that grew nothing further. */
+function growLayout(rng: Rng, target: number) {
   const rooms = new Map<string, RoomNode>();
   const deadEnds: RoomNode[] = [];
-
   const add = (x: number, y: number, depth: number): RoomNode => {
     const room: RoomNode = { x, y, type: 'normal', depth, visited: false, cleared: false, itemTaken: false };
     rooms.set(key(x, y), room);
     return room;
   };
-  const occupiedNeighbors = (x: number, y: number) =>
-    Object.values(DIRS).filter(({ dx, dy }) => rooms.has(key(x + dx, y + dy))).length;
 
-  const start = add(cx, cy, 0);
+  const start = add(Math.floor(FLOOR_GRID_W / 2), Math.floor(FLOOR_GRID_H / 2), 0);
   start.type = 'start';
   const queue: RoomNode[] = [start];
-
-  while (queue.length > 0) {
-    const room = queue.shift()!;
-    const sizeBefore = rooms.size;
-
+  /** Queues valid, unvisited neighbors of `room` as new rooms to grow from. */
+  const grow = (room: RoomNode) => {
     for (const dir of rng.shuffle(Object.keys(DIRS) as Dir[])) {
       const nx = room.x + DIRS[dir].dx;
       const ny = room.y + DIRS[dir].dy;
       if (nx < 0 || ny < 0 || nx >= FLOOR_GRID_W || ny >= FLOOR_GRID_H) continue;
       if (rooms.has(key(nx, ny))) continue;
       if (rooms.size >= target) continue;
-      if (occupiedNeighbors(nx, ny) > 1) continue;
+      if (occupiedNeighbors(rooms, nx, ny) > 1) continue;
       if (rng.chance(0.5)) continue;
 
       queue.push(add(nx, ny, room.depth + 1));
     }
+  };
 
+  while (queue.length > 0) {
+    const room = queue.shift()!;
+    const sizeBefore = rooms.size;
+    grow(room);
     if (rooms.size === sizeBefore && room !== start) deadEnds.push(room);
   }
+  return { rooms, start, deadEnds };
+}
 
-  // A room can be marked dead-end and later gain a neighbor; recheck.
-  const realDeadEnds = deadEnds.filter((r) => occupiedNeighbors(r.x, r.y) === 1);
-  if (rooms.size < target || realDeadEnds.length < 2) return null;
-
+/** Boss on the deepest dead end, treasure on the shallowest, a shop between when one is spare. */
+function placeSpecialRooms(start: RoomNode, realDeadEnds: RoomNode[]) {
   realDeadEnds.sort((a, b) => b.depth - a.depth);
   realDeadEnds[0].type = 'boss';
   const treasure = realDeadEnds[realDeadEnds.length - 1];
   treasure.type = 'treasure';
+  // A shop only when a third dead end is left over; picking it rolls nothing, so layouts don't change.
+  const shop = realDeadEnds.length >= 3 ? realDeadEnds[realDeadEnds.length - 2] : undefined;
+  if (shop) shop.type = 'shop';
 
   // Rooms without combat start open.
   start.visited = true;
   start.cleared = true;
   treasure.cleared = true;
-  return new Floor(rooms, start);
+  if (shop) shop.cleared = true;
 }

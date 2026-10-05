@@ -45,6 +45,7 @@ export const ptBR = {
   'event.dark.cleared': 'A sala foi exorcizada',
   'death.title': 'Engolido pelas sombras',
   'death.greed': 'A ganância foi sua ruína',
+  'death.spikes': 'Espetado nos espinhos',
   'victory.title': 'A última porta se abriu',
   'pause.title': 'Pausado',
   'pause.seed': 'seed {seed}',
@@ -83,12 +84,16 @@ export const ptBR = {
   'summary.rooms': 'Salas {n}',
   'summary.no-items': 'Nenhum item',
   'summary.seeded': 'seed fixa',
-  'summary.new-run': 'Enter nova run',
+  'summary.new-run': 'R nova run',
   'summary.new-run-touch': 'Nova run',
-  'summary.same-seed': 'R repetir seed',
-  'summary.same-seed-touch': 'Repetir seed',
   'summary.menu': 'Esc menu',
   'summary.menu-touch': 'Menu',
+
+  'shop.price': '{n} moedas',
+  'shop.heal.name': 'Cura grande',
+  'shop.heal.hint': 'Recupera {pct}% da vida máxima',
+  'shop.drive.name': 'Carga de drive',
+  'shop.drive.hint': '+1 carga máxima de drive, já carregada',
 
   'item.ether-core.name': 'Núcleo de Éter',
   'item.ether-core.description': 'Dano +1.5',
@@ -210,6 +215,7 @@ export const ptBR = {
   'wiki.nav.enemies': 'Inimigos',
   'wiki.nav.items': 'Itens',
   'wiki.nav.events': 'Salas especiais',
+  'wiki.nav.obstacles': 'Obstáculos',
   'wiki.nav.key': 'Chave',
   'wiki.footer': 'Gerada dos próprios dados do jogo: está sempre na versão que você joga.',
   'wiki.floor-range': 'Andares {first}–{last}',
@@ -243,6 +249,7 @@ export const ptBR = {
   'wiki.trait.anchored': 'Fixo no chão: não anda e não é empurrado',
   'wiki.trait.axis-walk': 'Anda só em linha reta, virando em ângulo reto',
   'wiki.trait.ghost': 'Atravessa outros inimigos',
+  'wiki.trait.flies': 'Flutua sobre buracos e espinhos',
   'wiki.trait.fury':
     'Abaixo de {pct}% do HP entra em fúria: investidas que ricocheteiam nas paredes ({damage} de dano)',
   'wiki.items.intro':
@@ -270,8 +277,25 @@ export const ptBR = {
     'Cada sala limpa devolve 1 carga. O máximo começa em {start} e chega a {max} com melhorias; sem carga, o golpe não sai.',
   'wiki.swing.doors':
     'Acertar uma porta fechada a abre, mesmo no meio da luta. Voltar a uma sala que não foi limpa tranca tudo de novo.',
-  'wiki.swing.locked': 'A partir do andar {n}, a sala do tesouro fica trancada: só o golpe abre a porta.',
+  'wiki.swing.locked': 'A sala do tesouro e a loja têm {pct}% de chance de estar trancadas: só o golpe abre a porta.',
   'wiki.swing.demo': 'Demonstração do golpe: a chave varre o leque à frente do herói e empurra uma Sombra.',
+  'wiki.shop.name': 'Loja',
+  'wiki.shop.where':
+    'Um beco por andar, quando sobra um; a porta tem {pct}% de chance de estar trancada. Encoste no pedestal para comprar.',
+  'wiki.shop.item': 'Um item do sorteio do tesouro: {price} moedas',
+  'wiki.shop.heal': 'Cura grande, {pct}% da vida máxima: {price} moedas',
+  'wiki.shop.drive': '+1 carga máxima de drive, já carregada, até {max}: {price} moedas',
+  'obstacle.rock.name': 'Pedra',
+  'obstacle.rock.text': 'Bloqueia a passagem e os tiros. O feixe passa por cima.',
+  'obstacle.cracked.name': 'Pedra rachada',
+  'obstacle.cracked.text':
+    'Como a pedra, mas o golpe da chave ou uma explosão a quebra. {pct}% de chance de esconder uma moeda.',
+  'obstacle.pit.name': 'Buraco',
+  'obstacle.pit.text': 'Ninguém atravessa a pé. Tiros e inimigos que flutuam passam por cima.',
+  'obstacle.spikes.name': 'Espinhos',
+  'obstacle.spikes.text': 'Pisar custa {damage} de HP. Inimigos andam por cima sem se ferir.',
+  'wiki.obstacles.intro':
+    'Salas comuns podem ter obstáculos, espelhados como numa sala construída; {pct}% ficam vazias. As portas e o centro ficam sempre livres, e todo o chão é alcançável.',
   'wiki.event.dark.name': 'Sala escura',
   'wiki.event.dark.text':
     'A luz se apaga e os inimigos vêm em {min} a {max} ondas. Cada onda vencida faz chover moedas e orbes de cura.',

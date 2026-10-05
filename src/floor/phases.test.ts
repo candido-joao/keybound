@@ -25,12 +25,10 @@ describe('phases', () => {
     expect(isFinalFloor(8)).toBe(true);
   });
 
-  it('have enemies from their first floor and at least one boss', () => {
-    let firstFloor = 1;
+  it('have enemies and at least one boss', () => {
     for (const phase of PHASES) {
-      expect(rollRoomEnemies(new Rng(phase.id), firstFloor, 5, phase.enemies)).toHaveLength(5);
+      expect(rollRoomEnemies(new Rng(phase.id), 5, phase.enemies)).toHaveLength(5);
       expect(phase.bosses.length).toBeGreaterThan(0);
-      firstFloor += phase.floors;
     }
   });
 

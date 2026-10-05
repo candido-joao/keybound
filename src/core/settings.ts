@@ -12,7 +12,7 @@ export interface Settings {
 
 const STORAGE_KEY = 'keybound.settings';
 const VERSION = 1;
-const DEFAULTS: Settings = { locale: null, console: false, stickMode: 'fixed' };
+const DEFAULTS: Settings = { locale: null, console: false, stickMode: 'floating' };
 
 /** Never throws: storage can be blocked (private mode) or hold data from another version. */
 export function loadSettings(): Settings {
@@ -42,7 +42,7 @@ export function parseSettings(data: unknown): Settings {
     locale: isLocale(record.locale) ? record.locale : null,
     console: record.console === true,
     // Saves from before the option read as the default.
-    stickMode: record.stickMode === 'floating' ? 'floating' : 'fixed',
+    stickMode: record.stickMode === 'fixed' ? 'fixed' : 'floating',
   };
 }
 

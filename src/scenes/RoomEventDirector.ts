@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { DropKind } from '../combat/drops';
 import type { EnemyDef } from '../combat/enemies';
-import { COLORS, DOOR_COL, DOOR_ROW, GAME_W, LABEL_RANGE, ROOM_Y, TILE, tileX, tileY } from '../config';
+import { ALTAR_ROW, COLORS, DOOR_COL, GAME_W, LABEL_RANGE, ROOM_Y, TILE, tileX, tileY } from '../config';
 import { Rng } from '../core/rng';
 import type { RoomNode } from '../floor/FloorGenerator';
 import {
@@ -258,7 +258,7 @@ export class RoomEventDirector {
   /** Above the room's center, clear of where the player enters. Optional: just don't touch it. */
   private placeAltar(room: RoomNode) {
     const x = tileX(DOOR_COL);
-    const y = tileY(DOOR_ROW - 2);
+    const y = tileY(ALTAR_ROW);
     const altar = this.scene.add.image(x, y, 'altar').setDepth(3);
     this.scene.physics.add.existing(altar, true);
     const label = this.scene.add

@@ -7,11 +7,14 @@ import {
   type ItemVersion,
   type Line,
   type PhaseEntry,
+  bareRoomPct,
   eventEntries,
   eventOdds,
   itemPools,
+  obstacleEntries,
   phaseEntries,
   pct,
+  shopLines,
   swingEntry,
 } from './catalog';
 import { enemySprite, itemIcon, phaseShot } from './sprites';
@@ -43,6 +46,7 @@ const NAV: readonly [string, MessageKey][] = [
   ['enemies', 'wiki.nav.enemies'],
   ['items', 'wiki.nav.items'],
   ['key', 'wiki.nav.key'],
+  ['obstacles', 'wiki.nav.obstacles'],
   ['events', 'wiki.nav.events'],
 ];
 
@@ -52,7 +56,16 @@ export function renderWiki(root: HTMLElement, onLocale: (locale: Locale) => void
   const phases = phaseEntries();
   root.replaceChildren(
     header(onLocale),
-    el('main', 'content', phasesSection(phases), enemiesSection(phases), itemsSection(), keySection(), eventsSection()),
+    el(
+      'main',
+      'content',
+      phasesSection(phases),
+      enemiesSection(phases),
+      itemsSection(),
+      keySection(),
+      obstaclesSection(),
+      eventsSection(),
+    ),
     el('footer', 'footer', t('wiki.footer')),
   );
 }
@@ -306,6 +319,25 @@ function keySection(): HTMLElement {
   return section('key', 'wiki.nav.key', t('wiki.key.intro'), card);
 }
 
+/** What can stand in a common room, each with its rule. */
+function obstaclesSection(): HTMLElement {
+  const cards = obstacleEntries().map(({ id, name, text }) => {
+    const card = el(
+      'article',
+      'card event',
+      el('div', 'card-body', el('h4', undefined, t(name)), el('p', undefined, line(text))),
+    );
+    card.id = `obstacle-${id}`;
+    return card;
+  });
+  return section(
+    'obstacles',
+    'wiki.nav.obstacles',
+    t('wiki.obstacles.intro', { pct: bareRoomPct() }),
+    el('div', 'cards', ...cards),
+  );
+}
+
 /** Render room-event descriptions with stable anchors and the normal and boss event chances. */
 function eventsSection(): HTMLElement {
   const cards = eventEntries().map(({ id, name, text }) => {
@@ -317,5 +349,26 @@ function eventsSection(): HTMLElement {
     card.id = `event-${id}`;
     return card;
   });
-  return section('events', 'wiki.nav.events', t('wiki.events.intro', eventOdds()), el('div', 'cards', ...cards));
+  return section(
+    'events',
+    'wiki.nav.events',
+    t('wiki.events.intro', eventOdds()),
+    el('div', 'cards', shopCard(), ...cards),
+  );
+}
+
+/** Not an event but a room of its own on most floors; listed with the special rooms. */
+function shopCard(): HTMLElement {
+  const card = el(
+    'article',
+    'card event',
+    el(
+      'div',
+      'card-body',
+      el('h4', undefined, t('wiki.shop.name')),
+      el('ul', 'lines', ...shopLines().map((l) => el('li', undefined, line(l)))),
+    ),
+  );
+  card.id = 'room-shop';
+  return card;
 }

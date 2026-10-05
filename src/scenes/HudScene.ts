@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { addItemIcon } from '../combat/items';
+import { addItemIcon } from './itemIcon';
 import { type Item, countItems } from '../combat/stats';
 import { COLORS, FLOOR_GRID_H, FLOOR_GRID_W, GAME_H, GAME_W, ROOM_H, ROOM_W, ROOM_X, ROOM_Y } from '../config';
-import { DIRS, type Dir, type RoomType } from '../floor/FloorGenerator';
+import { DIRS, type Dir, type RoomNode, type RoomType } from '../floor/FloorGenerator';
 import { phaseAt } from '../floor/phases';
 import { type Locale, type MessageKey, getLocale, t } from '../i18n';
 import { pad } from '../input/touch';
@@ -16,6 +16,12 @@ interface MapLayout {
   y: number;
   cellW: number;
   cellH: number;
+}
+
+/** Isaac rule: visited rooms plus their direct neighbors are shown. */
+function shownOnMap(game: GameScene, room: RoomNode): boolean {
+  if (game.mapRevealed || room.visited) return true;
+  return (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
 }
 
 const MINI: MapLayout = { x: GAME_W - FLOOR_GRID_W * 13 - 12, y: 8, cellW: 13, cellH: 9 };
@@ -33,6 +39,7 @@ const MAP_MARKER: Record<RoomType, number | undefined> = {
   normal: undefined,
   treasure: COLORS.treasure,
   boss: COLORS.boss,
+  shop: COLORS.shop,
 };
 
 // Collected items sit under the minimap, centered in the margin right of the room.
@@ -103,7 +110,12 @@ export class HudScene extends Phaser.Scene {
   private drawnHealth = -1;
   private drawnMaxHealth = -1;
   private icons: Phaser.GameObjects.GameObject[] = [];
-  private iconsKey = '';
+  /** The list and its size when last drawn: items are only ever added or removed one at a time. */
+  private drawnItems: readonly Item[] | null = null;
+  private drawnItemCount = -1;
+  private drawnMapRoom: RoomNode | null = null;
+  private drawnMapExpanded = false;
+  private drawnMapRevealed = false;
   private bossBar!: Phaser.GameObjects.Graphics;
   private bossName!: Phaser.GameObjects.Text;
   private bossTrail = new HealthTrail();
@@ -129,7 +141,8 @@ export class HudScene extends Phaser.Scene {
     // Above the HP bar and icons, so the expanded map's backdrop dims them too.
     this.map = this.add.graphics().setDepth(10);
     this.icons = [];
-    this.iconsKey = '';
+    this.drawnItems = null;
+    this.drawnMapRoom = null;
     this.labelDepth = 0;
     this.labelLocale = null;
     this.createCurrency();
@@ -182,13 +195,18 @@ export class HudScene extends Phaser.Scene {
     this.bossNameKey = undefined;
   }
 
+  /** Hides the boss bar and name, once, the first update after the boss is gone. */
+  private hideBossBar() {
+    if (this.drawnBossMax === 0) return;
+    this.drawnBossMax = 0;
+    this.bossBar.setVisible(false);
+    this.bossName.setVisible(false);
+  }
+
   /** Shown while a boss lives; redraws only when its HP, the trail or the language changed. */
   private drawBossBar(boss: { hp: number; max: number; name?: MessageKey }, delta: number) {
     if (boss.max <= 0) {
-      if (this.drawnBossMax === 0) return;
-      this.drawnBossMax = 0;
-      this.bossBar.setVisible(false);
-      this.bossName.setVisible(false);
+      this.hideBossBar();
       return;
     }
 
@@ -364,44 +382,48 @@ export class HudScene extends Phaser.Scene {
     ctx.stroke();
   }
 
+  /** Only rooms visited or revealed change it, and a room is visited by walking into it. */
   private drawMinimap(game: GameScene, layout: MapLayout, expanded: boolean) {
-    const { cellW, cellH } = layout;
+    const unchanged =
+      game.room === this.drawnMapRoom &&
+      expanded === this.drawnMapExpanded &&
+      game.mapRevealed === this.drawnMapRevealed;
+    if (unchanged) return;
+    this.drawnMapRoom = game.room;
+    this.drawnMapExpanded = expanded;
+    this.drawnMapRevealed = game.mapRevealed;
     const g = this.map.clear();
     if (expanded) g.fillStyle(0x000000, 0.5).fillRect(0, 0, GAME_W, GAME_H);
     g.fillStyle(0x000000, expanded ? 0.75 : 0.45).fillRect(
       layout.x - 4,
       layout.y - 4,
-      FLOOR_GRID_W * cellW + 8,
-      FLOOR_GRID_H * cellH + 8,
+      FLOOR_GRID_W * layout.cellW + 8,
+      FLOOR_GRID_H * layout.cellH + 8,
     );
-
-    const gap = expanded ? 4 : 2;
     for (const room of game.floor.rooms.values()) {
-      // Isaac rule: visited rooms plus their direct neighbors are shown.
-      const revealed =
-        game.mapRevealed ||
-        room.visited ||
-        (Object.keys(DIRS) as Dir[]).some((d) => game.floor.neighbor(room, d)?.visited);
-      if (!revealed) continue;
-
-      const x = layout.x + room.x * cellW;
-      const y = layout.y + room.y * cellH;
-      const current = room === game.room;
-      g.fillStyle(current ? 0xffffff : room.visited ? 0x8d84b8 : 0x3d365e).fillRect(x, y, cellW - gap, cellH - gap);
-
-      const marker = MAP_MARKER[room.type];
-      if (marker !== undefined) {
-        const inset = expanded ? 8 : 3;
-        g.fillStyle(marker).fillRect(x + inset, y + inset * 0.7, cellW - gap - inset * 2, cellH - gap - inset * 1.4);
-      }
+      if (shownOnMap(game, room)) this.drawMapRoom(room, room === game.room, layout, expanded);
     }
+  }
+
+  private drawMapRoom(room: RoomNode, current: boolean, layout: MapLayout, expanded: boolean) {
+    const { cellW, cellH } = layout;
+    const gap = expanded ? 4 : 2;
+    const x = layout.x + room.x * cellW;
+    const y = layout.y + room.y * cellH;
+    const fill = current ? 0xffffff : room.visited ? 0x8d84b8 : 0x3d365e;
+    this.map.fillStyle(fill).fillRect(x, y, cellW - gap, cellH - gap);
+
+    const marker = MAP_MARKER[room.type];
+    if (marker === undefined) return;
+    const inset = expanded ? 8 : 3;
+    this.map.fillStyle(marker).fillRect(x + inset, y + inset * 0.7, cellW - gap - inset * 2, cellH - gap - inset * 1.4);
   }
 
   /** One faded icon per distinct item; rebuilt only when the inventory changes. */
   private drawItemIcons(items: readonly Item[]) {
-    const key = items.map((i) => i.id).join(',');
-    if (key === this.iconsKey) return;
-    this.iconsKey = key;
+    if (items === this.drawnItems && items.length === this.drawnItemCount) return;
+    this.drawnItems = items;
+    this.drawnItemCount = items.length;
     this.icons.forEach((o) => o.destroy());
     this.icons = [];
 

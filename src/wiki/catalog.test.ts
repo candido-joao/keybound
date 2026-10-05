@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { POOL_DEPTH } from '../combat/balance';
-import {
-  CRYSTAL_SENTINEL,
-  CRYSTAL_SHARD,
-  CRYSTAL_SPIKE,
-  ENEMIES,
-  SHADOW_COLOSSUS,
-  type VolleyAttack,
-} from '../combat/enemies';
+import { CRYSTAL_SENTINEL, CRYSTAL_SHARD, ENEMIES, SHADOW_COLOSSUS, type VolleyAttack } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { baseId } from '../combat/stats';
 import { RUN_FLOORS } from '../floor/phases';
 import { ROOM_EVENTS } from '../floor/roomEvents';
 import { SWING } from '../combat/swing';
-import { attackLine, enemyLines, eventEntries, itemEntries, itemPools, phaseEntries, swingEntry } from './catalog';
+import { SHOP } from '../combat/shop';
+import {
+  attackLine,
+  enemyLines,
+  eventEntries,
+  itemEntries,
+  itemPools,
+  phaseEntries,
+  shopLines,
+  swingEntry,
+} from './catalog';
 
 describe('phaseEntries', () => {
   it('covers every floor of the run once, in order', () => {
@@ -28,10 +31,9 @@ describe('phaseEntries', () => {
     for (const def of ENEMIES) expect(listed, def.id).toContain(def.id);
   });
 
-  it('starts an enemy no earlier than its phase or its own first floor', () => {
-    const garden = phaseEntries().find((p) => p.def.id === 'garden')!;
-    expect(garden.enemies.find((e) => e.def === CRYSTAL_SENTINEL)!.fromFloor).toBe(garden.firstFloor);
-    expect(garden.enemies.find((e) => e.def === CRYSTAL_SPIKE)!.fromFloor).toBe(5);
+  it('starts every enemy from the first floor of its phase', () => {
+    const entries = phaseEntries().flatMap((phase) => phase.enemies.map((e) => ({ phase, e })));
+    for (const { phase, e } of entries) expect(e.fromFloor, e.def.id).toBe(phase.firstFloor);
   });
 
   it('puts split pieces right after their parent, telling where they come from', () => {
@@ -102,5 +104,12 @@ describe('swingEntry', () => {
     expect(entry.reach).toBe(SWING.reach);
     expect(entry.arcDegrees).toBe(150);
     expect(entry.damagePct).toBe(50);
+  });
+});
+
+describe('shopLines', () => {
+  it('quotes the prices the game charges', () => {
+    const prices = shopLines().flatMap((l) => (l.params?.price === undefined ? [] : [l.params.price]));
+    expect(prices).toEqual([SHOP.prices.item, SHOP.prices.heal, SHOP.prices.drive]);
   });
 });

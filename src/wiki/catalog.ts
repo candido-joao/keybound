@@ -1,9 +1,11 @@
 import { POOL_DEPTH } from '../combat/balance';
-import { ENEMIES, type EnemyAttack, type EnemyDef } from '../combat/enemies';
+import { ENEMIES, type EnemyAttack, type EnemyDef, type VolleyAttack } from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { type Item, type ItemPool, baseId } from '../combat/stats';
+import { SHOP } from '../combat/shop';
 import { DRIVE, SWING } from '../combat/swing';
-import { LOCK_FROM_DEPTH } from '../floor/locks';
+import { LOCK_CHANCE } from '../floor/locks';
+import { OBSTACLES, OBSTACLE_TUNING, type ObstacleId, obstacleDef } from '../floor/obstacles';
 import { PHASES, type PhaseDef } from '../floor/phases';
 import { EVENT_CHANCE, EVENT_TUNING, ROOM_EVENTS, type RoomEventId } from '../floor/roomEvents';
 import type { MessageKey } from '../i18n';
@@ -71,12 +73,10 @@ export function phaseEntries(phases: readonly PhaseDef[] = PHASES): PhaseEntry[]
   return entries;
 }
 
-/** Room enemies by first floor, each followed by what it splits into. */
-function phaseEnemies(phase: PhaseDef, firstFloor: number): EnemyEntry[] {
-  const sorted = [...phase.enemies].sort((a, b) => a.minDepth - b.minDepth);
+/** Room enemies, each followed by what it splits into; all of them can turn up from the phase's first floor. */
+function phaseEnemies(phase: PhaseDef, fromFloor: number): EnemyEntry[] {
   const entries: EnemyEntry[] = [];
-  for (const { def, minDepth } of sorted) {
-    const fromFloor = Math.max(firstFloor, minDepth);
+  for (const { def } of phase.enemies) {
     entries.push({ def, fromFloor, lines: enemyLines(def) });
     const child = def.split && enemyById(def.split.id);
     if (child) entries.push({ def: child, fromFloor, lines: [splitFrom(def), ...enemyLines(child)] });
@@ -96,7 +96,12 @@ export function enemyById(id: string): EnemyDef | undefined {
 
 /** What an enemy does, attacks first, then how it moves and dies. */
 export function enemyLines(def: EnemyDef): Line[] {
-  const lines = def.attacks.map(attackLine);
+  return [...def.attacks.map(attackLine), ...bossLines(def), ...movementLines(def), ...splitLines(def)];
+}
+
+/** Builds translatable boss, fury and revival traits, converting health shares and delays for display. */
+function bossLines(def: EnemyDef): Line[] {
+  const lines: Line[] = [];
   if (def.boss) lines.push({ key: 'wiki.trait.boss' });
   if (def.fury) {
     lines.push({ key: 'wiki.trait.fury', params: { pct: pct(def.fury.hpShare), damage: def.fury.dash.damage } });
@@ -104,16 +109,29 @@ export function enemyLines(def: EnemyDef): Line[] {
   if (def.revive) {
     lines.push({ key: 'wiki.trait.revive', params: { s: seconds(def.revive.delayMs), pct: pct(def.revive.hpShare) } });
   }
-  if (def.fade) lines.push({ key: 'wiki.trait.fade' });
-  if (def.blink) lines.push({ key: 'wiki.trait.blink' });
-  if (def.anchored) lines.push({ key: 'wiki.trait.anchored' });
-  if (def.axisWalk) lines.push({ key: 'wiki.trait.axis-walk' });
-  if (def.ghost) lines.push({ key: 'wiki.trait.ghost' });
-  const child = def.split && enemyById(def.split.id);
-  if (def.split && child) {
-    lines.push({ key: 'wiki.trait.split', params: { count: def.split.count, name: { key: child.name } } });
-  }
   return lines;
+}
+
+/** Traits that only need saying, in the order the wiki lists them. */
+const MOVEMENT_TRAITS = [
+  ['fade', 'wiki.trait.fade'],
+  ['blink', 'wiki.trait.blink'],
+  ['anchored', 'wiki.trait.anchored'],
+  ['axisWalk', 'wiki.trait.axis-walk'],
+  ['ghost', 'wiki.trait.ghost'],
+  ['flies', 'wiki.trait.flies'],
+] as const satisfies readonly (readonly [keyof EnemyDef, MessageKey])[];
+
+/** Lists enabled movement traits in the fixed display order shared by all enemy entries. */
+function movementLines(def: EnemyDef): Line[] {
+  return MOVEMENT_TRAITS.filter(([trait]) => def[trait]).map(([, key]) => ({ key }));
+}
+
+/** Describes split offspring by count and translated name, omitting missing child definitions. */
+function splitLines(def: EnemyDef): Line[] {
+  const child = def.split && enemyById(def.split.id);
+  if (!def.split || !child) return [];
+  return [{ key: 'wiki.trait.split', params: { count: def.split.count, name: { key: child.name } } }];
 }
 
 /** Describe a split child using its parent’s translatable name. */
@@ -133,6 +151,11 @@ export function attackLine(attack: EnemyAttack): Line {
     return { key: 'wiki.attack.summon', params: { min: attack.min, max: attack.max, name } };
   }
   if (attack.kind === 'explode') return { key: 'wiki.attack.explode', params: { damage: attack.damage } };
+  return volleyLine(attack);
+}
+
+/** Chooses a burst, single shot, ring or fan description, giving repeated bursts precedence. */
+function volleyLine(attack: VolleyAttack): Line {
   const { count, damage } = attack;
   if ((attack.shots ?? 1) > 1) return { key: 'wiki.attack.volley.burst', params: { shots: attack.shots!, damage } };
   if (count === 1) return { key: 'wiki.attack.volley.single', params: { damage } };
@@ -239,7 +262,38 @@ export function swingEntry(): SwingEntry {
       { key: 'wiki.swing.sweep' },
       { key: 'wiki.swing.drive', params: { start: DRIVE.startMax, max: DRIVE.maxCap } },
       { key: 'wiki.swing.doors' },
-      { key: 'wiki.swing.locked', params: { n: LOCK_FROM_DEPTH } },
+      { key: 'wiki.swing.locked', params: { pct: pct(LOCK_CHANCE) } },
     ],
   };
+}
+
+/** The shop's wares and prices, as the game sets them. */
+export function shopLines(): Line[] {
+  const { prices, healShare } = SHOP;
+  return [
+    { key: 'wiki.shop.where', params: { pct: pct(LOCK_CHANCE) } },
+    { key: 'wiki.shop.item', params: { price: prices.item } },
+    { key: 'wiki.shop.heal', params: { price: prices.heal, pct: pct(healShare) } },
+    { key: 'wiki.shop.drive', params: { price: prices.drive, max: DRIVE.maxCap } },
+  ];
+}
+
+export interface ObstacleEntry {
+  id: ObstacleId;
+  name: MessageKey;
+  text: Line;
+}
+
+/** Each obstacle with its numbers, in registry order. */
+export function obstacleEntries(): ObstacleEntry[] {
+  const params: Partial<Record<ObstacleId, Line['params']>> = {
+    cracked: { pct: pct(OBSTACLE_TUNING.rubbleCoinChance) },
+    spikes: { damage: obstacleDef('spikes').damage },
+  };
+  return OBSTACLES.map(({ id, name, text }) => ({ id, name, text: { key: text, params: params[id] } }));
+}
+
+/** Share of common rooms left without obstacles, in %. */
+export function bareRoomPct(): number {
+  return pct(OBSTACLE_TUNING.emptyChance);
 }
