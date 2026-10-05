@@ -13,6 +13,7 @@
 
 - Lógica simples e robusta. Funções curtas, com uma responsabilidade.
 - Não use `else`: prefira guard clauses e early return.
+- Não aninhe `if` dentro de `if` nem loop dentro de loop: extraia uma função ou percorra uma lista plana.
 - Comente só o porquê que o código não mostra. Nada de comentário que repete o código.
 - Separe a lógica de jogo pura (atributos, vida, drops, desbloqueios, geração de andar) do Phaser. Ela não importa `phaser` e fica testável isolada; cenas e entidades só leem esse estado e desenham. A migração é gradual, feita junto com cada mudança.
 - Conteúdo (itens, inimigos, bosses, fases, personagens) vive em registros de dados, no padrão de `ITEMS`.
@@ -25,7 +26,7 @@
 ## Verificação
 
 - Antes de qualquer push, precisam passar:
-  - `pnpm lint`: ESLint. Bloqueia `else`, `Math.random` e `phaser` importado na lógica pura.
+  - `pnpm lint`: ESLint. Bloqueia `else`, `if` dentro de `if`, loop dentro de loop, `Math.random` e `phaser` importado na lógica pura.
   - `pnpm format:check`: Prettier. `pnpm format` corrige.
   - `pnpm test`: vitest, para a lógica pura (`*.test.ts` ao lado do arquivo testado).
   - `pnpm build`: `tsc` e `vite build`.

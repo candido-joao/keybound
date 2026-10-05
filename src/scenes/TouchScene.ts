@@ -62,15 +62,17 @@ export class TouchScene extends Phaser.Scene {
       this.drawnCharged = charged;
       this.dirty = true;
     }
-    if (show !== this.shown) {
-      this.shown = show;
-      if (!show) pad.releaseAll();
-      this.dirty = true;
-    }
+    if (show !== this.shown) this.setShown(show);
     if (!this.dirty) return;
     this.dirty = false;
     this.clear();
     if (show) this.draw();
+  }
+
+  private setShown(show: boolean) {
+    this.shown = show;
+    if (!show) pad.releaseAll();
+    this.dirty = true;
   }
 
   /** Only during play, outside transitions, boss intros and overlays. */

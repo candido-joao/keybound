@@ -11,11 +11,11 @@ describe('generateFloor', () => {
       const floor = generateFloor(new Rng(seed), 4);
       const found = [...floor.rooms.values()].filter((r) => r.type === 'shop');
       expect(found.length).toBeLessThanOrEqual(1);
-      for (const shop of found) {
-        expect(floor.doors(shop)).toHaveLength(1);
-        expect(shop.cleared).toBe(true);
-      }
       shops += found.length;
+      const shop = found.at(0);
+      if (!shop) continue;
+      expect(floor.doors(shop)).toHaveLength(1);
+      expect(shop.cleared).toBe(true);
     }
     // Floors this deep almost always have a third dead end to spare.
     expect(shops).toBeGreaterThan(SEEDS.length / 2);

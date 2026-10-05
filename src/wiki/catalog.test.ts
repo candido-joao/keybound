@@ -32,9 +32,8 @@ describe('phaseEntries', () => {
   });
 
   it('starts every enemy from the first floor of its phase', () => {
-    for (const phase of phaseEntries()) {
-      for (const e of phase.enemies) expect(e.fromFloor, e.def.id).toBe(phase.firstFloor);
-    }
+    const entries = phaseEntries().flatMap((phase) => phase.enemies.map((e) => ({ phase, e })));
+    for (const { phase, e } of entries) expect(e.fromFloor, e.def.id).toBe(phase.firstFloor);
   });
 
   it('puts split pieces right after their parent, telling where they come from', () => {

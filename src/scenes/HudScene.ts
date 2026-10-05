@@ -183,13 +183,17 @@ export class HudScene extends Phaser.Scene {
     this.bossNameKey = undefined;
   }
 
+  private hideBossBar() {
+    if (this.drawnBossMax === 0) return;
+    this.drawnBossMax = 0;
+    this.bossBar.setVisible(false);
+    this.bossName.setVisible(false);
+  }
+
   /** Shown while a boss lives; redraws only when its HP, the trail or the language changed. */
   private drawBossBar(boss: { hp: number; max: number; name?: MessageKey }, delta: number) {
     if (boss.max <= 0) {
-      if (this.drawnBossMax === 0) return;
-      this.drawnBossMax = 0;
-      this.bossBar.setVisible(false);
-      this.bossName.setVisible(false);
+      this.hideBossBar();
       return;
     }
 

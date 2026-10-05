@@ -70,12 +70,18 @@ export function generateFloor(rng: Rng, floorDepth: number): Floor {
 
   // A smaller floor beats a crashed run: shrink the target until one fits.
   for (let size = target; size >= MIN_ROOMS; size--) {
-    for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
-      const floor = tryGenerate(rng, size);
-      if (floor) return floor;
-    }
+    const floor = tryGenerateSize(rng, size);
+    if (floor) return floor;
   }
   throw new Error(`Floor generation failed (seed ${rng.seed}, depth ${floorDepth})`);
+}
+
+function tryGenerateSize(rng: Rng, size: number): Floor | null {
+  for (let attempt = 0; attempt < ATTEMPTS_PER_SIZE; attempt++) {
+    const floor = tryGenerate(rng, size);
+    if (floor) return floor;
+  }
+  return null;
 }
 
 function tryGenerate(rng: Rng, target: number): Floor | null {
@@ -95,11 +101,7 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
   const start = add(cx, cy, 0);
   start.type = 'start';
   const queue: RoomNode[] = [start];
-
-  while (queue.length > 0) {
-    const room = queue.shift()!;
-    const sizeBefore = rooms.size;
-
+  const grow = (room: RoomNode) => {
     for (const dir of rng.shuffle(Object.keys(DIRS) as Dir[])) {
       const nx = room.x + DIRS[dir].dx;
       const ny = room.y + DIRS[dir].dy;
@@ -111,7 +113,12 @@ function tryGenerate(rng: Rng, target: number): Floor | null {
 
       queue.push(add(nx, ny, room.depth + 1));
     }
+  };
 
+  while (queue.length > 0) {
+    const room = queue.shift()!;
+    const sizeBefore = rooms.size;
+    grow(room);
     if (rooms.size === sizeBefore && room !== start) deadEnds.push(room);
   }
 

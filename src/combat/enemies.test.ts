@@ -91,11 +91,9 @@ describe('ENEMIES', () => {
   });
 
   it('keeps plain enemies free of attack telegraphs', () => {
-    for (const def of ENEMIES) {
-      if (def.boss) continue;
-      for (const attack of def.attacks) {
-        if ('telegraphMs' in attack) expect(attack.telegraphMs, def.id).toBe(0);
-      }
+    const attacks = ENEMIES.filter((def) => !def.boss).flatMap((def) => def.attacks.map((attack) => ({ def, attack })));
+    for (const { def, attack } of attacks) {
+      if ('telegraphMs' in attack) expect(attack.telegraphMs, def.id).toBe(0);
     }
   });
 });
