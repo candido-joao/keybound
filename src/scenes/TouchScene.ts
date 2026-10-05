@@ -190,6 +190,7 @@ export class TouchScene extends Phaser.Scene {
   }
 }
 
+/** Converts a packed 0xRRGGBB color to a CSS canvas style, capping boosted opacity at 1. */
 function rgba(color: number, alpha: number): string {
   return `rgba(${(color >> 16) & 0xff}, ${(color >> 8) & 0xff}, ${color & 0xff}, ${Math.min(1, alpha)})`;
 }
