@@ -98,6 +98,7 @@ export class VirtualPad {
   /** Presses not yet taken by `consume`, so a quick tap between two frames still counts. */
   private readonly tapped: Record<PadButton, boolean> = { pause: false, map: false, swing: false };
 
+  /** Starts the view at the layout's own bounds, until `setView` narrows it to the screen. */
   constructor(layout: PadLayout, mode: StickMode) {
     this.layout = layout;
     this.mode = mode;
@@ -194,6 +195,7 @@ export class VirtualPad {
     return Math.abs(y) > Math.abs(x) ? Math.sign(y) : 0;
   }
 
+  /** The button, if any, under a point in game coordinates. */
   private buttonAt(x: number, y: number): PadButton | undefined {
     const { buttons } = this;
     return BUTTONS.find((b) => Math.hypot(x - buttons[b].x, y - buttons[b].y) <= buttons[b].r);

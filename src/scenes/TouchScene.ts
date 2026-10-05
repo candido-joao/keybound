@@ -29,6 +29,7 @@ export class TouchScene extends Phaser.Scene {
     super('touch');
   }
 
+  /** Grabs the overlay canvas and wires pointer listeners on `window`, torn down on shutdown. */
   create() {
     this.overlay = document.getElementById('touch') as HTMLCanvasElement;
     this.ctx = this.overlay.getContext('2d')!;
@@ -49,6 +50,7 @@ export class TouchScene extends Phaser.Scene {
     });
   }
 
+  /** Consumes the pause tap, keeps the overlay fitted to the screen, and redraws if needed. */
   update() {
     const game = this.scene.get('game') as GameScene;
     // Taken here, inside the game loop, rather than in the DOM event.
@@ -78,18 +80,21 @@ export class TouchScene extends Phaser.Scene {
     );
   }
 
+  /** Presses the pad from a touch pointer, converting page coordinates to game ones. */
   private readonly onDown = (e: PointerEvent) => {
     if (e.pointerType !== 'touch' || !this.playable) return;
     pad.press(e.pointerId, this.scale.transformX(e.pageX), this.scale.transformY(e.pageY));
     this.dirty = true;
   };
 
+  /** Drags the pad from a touch pointer move. */
   private readonly onMove = (e: PointerEvent) => {
     if (e.pointerType !== 'touch') return;
     pad.drag(e.pointerId, this.scale.transformX(e.pageX), this.scale.transformY(e.pageY));
     this.dirty = true;
   };
 
+  /** Releases by id for any pointer type: ids from a non-touch pointer simply match nothing held. */
   private readonly onUp = (e: PointerEvent) => {
     pad.release(e.pointerId);
     this.dirty = true;
@@ -122,6 +127,7 @@ export class TouchScene extends Phaser.Scene {
     this.dirty = true;
   }
 
+  /** Clears the whole overlay canvas, regardless of the transform left by the last draw. */
   private clear() {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.overlay.width, this.overlay.height);
@@ -157,6 +163,7 @@ export class TouchScene extends Phaser.Scene {
     ctx.stroke();
   }
 
+  /** Draws a stick's base ring and its knob offset. */
   private drawStick(stick: Stick) {
     const ctx = this.ctx;
     const alpha = stick.active ? RING_ALPHA : IDLE_ALPHA;
@@ -167,6 +174,7 @@ export class TouchScene extends Phaser.Scene {
     ctx.fill();
   }
 
+  /** Draws the pause button with its two bars. */
   private drawPause() {
     const ctx = this.ctx;
     const button = pad.button('pause');
