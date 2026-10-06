@@ -10,6 +10,7 @@ export interface Puddle {
 /** The fade before a puddle dries; it still hurts meanwhile. */
 export const PUDDLE_FADE_MS = 700;
 
+/** Whether the puddle can still hurt the player, including while it fades. */
 export function wet(puddle: Puddle, now: number): boolean {
   return now < puddle.dryAt;
 }

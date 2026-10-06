@@ -20,6 +20,7 @@ export class BloodPuddles {
   /** Some puddle may still be wet, so drying has work to do. */
   private spilled = false;
 
+  /** Preallocates hidden puddles so spilling during a dash needs no new images. */
   constructor(game: GameScene) {
     this.game = game;
     for (let i = 0; i < POOL_SIZE; i++) {
@@ -28,6 +29,7 @@ export class BloodPuddles {
     }
   }
 
+  /** Reuses the soonest-drying slot for a fresh puddle timed by the gameplay clock. */
   readonly spill = (x: number, y: number, trail: BloodTrail) => {
     const slot = this.slots[puddleSlot(this.slots)];
     slot.x = x;
@@ -73,6 +75,7 @@ export class BloodPuddles {
     return left || won;
   }
 
+  /** Makes every puddle harmless and hidden when the room is left or won. */
   private dry() {
     if (!this.spilled) return;
     this.spilled = false;
