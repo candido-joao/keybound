@@ -5,6 +5,7 @@ import {
   ENEMIES,
   ENEMY_FRAME,
   ENEMY_WALK_FPS,
+  type EnemyDef,
   walkAnimKey,
   walkFrames,
 } from '../combat/enemies';
@@ -70,12 +71,18 @@ export class BootScene extends Phaser.Scene {
     });
     this.load.spritesheet(HERO_SHEET, 'hero/walk.png', { frameWidth: HERO_FRAME_W, frameHeight: HERO_FRAME_H });
     const frame = { frameWidth: ENEMY_FRAME, frameHeight: ENEMY_FRAME };
-    for (const def of ENEMIES) if (def.frames) this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, frame);
+    for (const def of ENEMIES) if (def.frames) this.loadEnemy(def);
     this.load.spritesheet(BONE_PILE, `enemies/${BONE_PILE}.png`, frame);
     for (const [key, file] of this.obstacleArt) this.load.image(key, file);
   }
 
   /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
+  private loadEnemy(def: EnemyDef) {
+    const side = def.frameSize ?? ENEMY_FRAME;
+    this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, { frameWidth: side, frameHeight: side });
+    if (def.introPose) this.load.image(`${def.texture}-intro`, `enemies/${def.texture}-intro.png`);
+  }
+
   create() {
     // The hero and key art are smooth downscales, not native pixel art: nearest sampling would break them up.
     for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET, SWING_FX]) {

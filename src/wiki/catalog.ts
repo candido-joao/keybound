@@ -64,8 +64,11 @@ export function phaseEntries(phases: readonly PhaseDef[] = PHASES): PhaseEntry[]
       def,
       firstFloor,
       lastFloor,
-      enemies: phaseEnemies(def, firstFloor),
-      bosses: def.bosses.map((boss) => ({ def: boss, fromFloor: firstFloor, lastFloor, lines: enemyLines(boss) })),
+      enemies: withPieces(
+        def.enemies.map((e) => e.def),
+        firstFloor,
+      ),
+      bosses: withPieces(def.bosses, firstFloor).map((entry) => ({ ...entry, lastFloor })),
       itemsFrom: poolOpening(firstFloor, lastFloor),
     });
     firstFloor = lastFloor + 1;
@@ -73,10 +76,10 @@ export function phaseEntries(phases: readonly PhaseDef[] = PHASES): PhaseEntry[]
   return entries;
 }
 
-/** Room enemies, each followed by what it splits into; all of them can turn up from the phase's first floor. */
-function phaseEnemies(phase: PhaseDef, fromFloor: number): EnemyEntry[] {
+/** Each enemy followed by what it splits into; all of them can turn up from the phase's first floor. */
+function withPieces(defs: readonly EnemyDef[], fromFloor: number): EnemyEntry[] {
   const entries: EnemyEntry[] = [];
-  for (const { def } of phase.enemies) {
+  for (const def of defs) {
     entries.push({ def, fromFloor, lines: enemyLines(def) });
     const child = def.split && enemyById(def.split.id);
     if (child) entries.push({ def: child, fromFloor, lines: [splitFrom(def), ...enemyLines(child)] });
@@ -124,7 +127,12 @@ const MOVEMENT_TRAITS = [
 
 /** Lists enabled movement traits in the fixed display order shared by all enemy entries. */
 function movementLines(def: EnemyDef): Line[] {
-  return MOVEMENT_TRAITS.filter(([trait]) => def[trait]).map(([, key]) => ({ key }));
+  return MOVEMENT_TRAITS.filter(([trait]) => def[trait]).map(([, key]) => ({ key: movementKey(def, key) }));
+}
+
+/** A blink that ends in a volley says so. */
+function movementKey(def: EnemyDef, key: MessageKey): MessageKey {
+  return key === 'wiki.trait.blink' && def.blink?.volley ? 'wiki.trait.blink-volley' : key;
 }
 
 /** Describes split offspring by count and translated name, omitting missing child definitions. */

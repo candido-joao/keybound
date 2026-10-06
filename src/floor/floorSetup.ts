@@ -6,7 +6,7 @@ import { Rng } from '../core/rng';
 import { type Floor, type RoomNode, generateFloor } from './FloorGenerator';
 import { startsLocked } from './locks';
 import { rollObstacles } from './obstacles';
-import { phaseAt, rollFloorBoss } from './phases';
+import { floorBoss } from './phases';
 import { rollRoomEvents } from './roomEvents';
 
 /** Everything rolled for a floor before the player sets foot on it. */
@@ -22,7 +22,7 @@ export interface FloorSetup {
  * own stream, so changing one never reshuffles another: same seed, same floor.
  */
 export function setUpFloor(seed: string, depth: number, owned: readonly Item[]): FloorSetup {
-  const boss = rollFloorBoss(new Rng(`${seed}:boss:${depth}`), phaseAt(depth));
+  const boss = floorBoss(seed, depth);
   const floor = generateFloor(new Rng(`${seed}:floor:${depth}`), depth);
   const rooms = [...floor.rooms.values()];
   for (const [room, id] of rollRoomEvents(new Rng(`${seed}:events:${depth}`), rooms)) room.event = id;

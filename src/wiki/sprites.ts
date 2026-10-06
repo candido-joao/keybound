@@ -48,12 +48,13 @@ export function enemySprite(def: EnemyDef): HTMLCanvasElement {
 }
 
 /** Draw a zero-based frame from a horizontal enemy strip without smoothing; skip unavailable images or contexts. */
-function drawFrame({ canvas, image }: Animated, frame: number) {
+function drawFrame({ canvas, image, def }: Animated, frame: number) {
   const ctx = canvas.getContext('2d');
   if (!ctx || !image) return;
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(image, frame * ENEMY_FRAME, 0, ENEMY_FRAME, ENEMY_FRAME, 0, 0, canvas.width, canvas.height);
+  const side = def.frameSize ?? ENEMY_FRAME;
+  ctx.drawImage(image, frame * side, 0, side, side, 0, 0, canvas.width, canvas.height);
 }
 
 /** The same stand-in body the game bakes, centered in a frame-sized box. */

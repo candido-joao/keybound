@@ -8,6 +8,8 @@ export interface BossIntroData {
   name: MessageKey;
   x: number;
   y: number;
+  /** Puts the boss in its intro pose, or back to its walk. */
+  pose: (on: boolean) => void;
 }
 
 const BAR_H = 64;
@@ -28,6 +30,7 @@ const END_AT = 2700;
  */
 export class BossIntroScene extends Phaser.Scene {
   private finished = false;
+  private pose: BossIntroData['pose'] = () => {};
 
   constructor() {
     super('boss-intro');
@@ -50,7 +53,11 @@ export class BossIntroScene extends Phaser.Scene {
     this.time.delayedCall(NAME_AT, () =>
       this.tweens.add({ targets: name, alpha: 1, scale: 1, duration: 300, ease: 'Back.Out' }),
     );
-    this.time.delayedCall(ROAR_AT, () => camera.shake(400, 0.008));
+    this.time.delayedCall(ROAR_AT, () => {
+      camera.shake(400, 0.008);
+      data.pose(true);
+    });
+    this.pose = data.pose;
 
     this.time.delayedCall(RETURN_AT, () => {
       this.tweens.add({ targets: name, alpha: 0, duration: RETURN_MS });
@@ -101,6 +108,7 @@ export class BossIntroScene extends Phaser.Scene {
   private finish() {
     if (this.finished) return;
     this.finished = true;
+    this.pose(false);
     const game = this.scene.get('game') as GameScene;
     const camera = game.cameras.main;
     camera.panEffect.reset();

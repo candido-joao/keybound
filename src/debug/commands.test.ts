@@ -64,6 +64,7 @@ function fakeTarget() {
       return 2;
     },
     goToFloor: (depth) => (state.floor = depth),
+    goToBossRoom: () => true,
     revealMap: () => (state.revealed = true),
     startEvent: (id) => {
       state.event = id;
