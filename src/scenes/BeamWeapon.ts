@@ -28,8 +28,6 @@ const CONTINUOUS_GRACE_MS = 50;
 /** The fan and the echoes share out `shotCount + echoShots` beams; each can refract into two more. */
 const MAX_AIMED = STAT_LIMITS.maxShotCount + ECHO_OFFSETS.length;
 const MAX_PATHS = MAX_AIMED * 3;
-/** One group per direction, then one per refracted beam. */
-const MAX_GROUPS = 1 + ECHO_OFFSETS.length + MAX_AIMED * 2;
 /** x, y pairs per path; past this a long, winding beam is cut short. */
 const PATH_POINTS = 96;
 const REFRACT_RAD = (BEAM.refractDeg * Math.PI) / 180;
@@ -52,9 +50,9 @@ const ROOM_INSIDE: Bounds = {
  * The charged beam once fired: follows the player's aim while it lasts, hits what it touches
  * once per tick, and is drawn fresh each frame from preallocated paths.
  *
- * Beams are grouped: one group per direction (the aim and each echo), and one per refracted
- * beam. Each tick an enemy takes at most one hit per group, so a fan covers ground rather than
- * stacking its damage on whoever stands at its mouth.
+ * Each beam of a fan hits on its own, as each bolt of a volley does: whoever the fan converges
+ * on, up close or through homing, takes every beam, else extra beams would add nothing against
+ * a single target and the beam would fall behind bolts with every multishot item.
  */
 export class BeamWeapon {
   private readonly host: StrikeHost;
@@ -65,13 +63,11 @@ export class BeamWeapon {
   /** Damage share per path: 1 aimed, `echoDamage` for echoes, less again once refracted. */
   private readonly shares: number[] = new Array<number>(MAX_PATHS).fill(1);
   private readonly widths: number[] = new Array<number>(MAX_PATHS).fill(1);
-  private readonly groups: number[] = new Array<number>(MAX_PATHS).fill(0);
+  /** Aimed, unrefracted beams: the key itself is part of them. */
+  private readonly keyed: boolean[] = new Array<boolean>(MAX_PATHS).fill(false);
   /** A refracted beam starts inside the enemy that split it, and mustn't hit it again. */
   private readonly skips: (Enemy | null)[] = new Array<Enemy | null>(MAX_PATHS).fill(null);
-  /** Per group, the last enemy stamp hit this tick; reused to count each group once per pile. */
-  private readonly groupStamps: number[] = new Array<number>(MAX_GROUPS).fill(-1);
   private pathCount = 0;
-  private groupCount = 0;
   private active = false;
   private continuous = false;
   private power = 1;
@@ -139,7 +135,6 @@ export class BeamWeapon {
     this.turn = s.homing / HOMING_PX_PER_SECOND;
     this.beamWidth = this.width(s);
     this.pathCount = 0;
-    this.groupCount = 1 + s.echoShots;
     for (let d = 0; d <= s.echoShots; d++) this.traceDirection(player, d);
   }
 
@@ -154,17 +149,18 @@ export class BeamWeapon {
     const y = d === 0 ? player.keyTipY : player.keyGripY + Math.sin(center) * reach;
     const count = shotsInDirection(d, s.shotCount, s.echoShots);
     for (let i = 0; i < count; i++) {
-      const p = this.tracePath(x, y, fanAngle(center, i, count, s.spread), this.length, d);
+      const p = this.tracePath(x, y, fanAngle(center, i, count, s.spread), this.length);
       if (p < 0) continue;
       this.shares[p] = d === 0 ? 1 : s.echoDamage;
+      this.keyed[p] = d === 0;
       if (s.refract > 0) this.refract(p);
     }
   }
 
   /** Traces a full-width path that skips no one; returns its index, or -1 when there's no room for it. */
-  private tracePath(x: number, y: number, angle: number, length: number, group: number): number {
+  private tracePath(x: number, y: number, angle: number, length: number): number {
     // The console can push shot counts past their limits; extra beams are dropped, never thrown.
-    if (this.pathCount >= MAX_PATHS || group >= MAX_GROUPS) return -1;
+    if (this.pathCount >= MAX_PATHS) return -1;
     const p = this.pathCount++;
     const ray = this.ray;
     ray.x = x;
@@ -175,7 +171,7 @@ export class BeamWeapon {
     this.pointCounts[p] = traceBeam(this.paths[p], ray, ROOM_INSIDE, this.aimAt);
     this.shares[p] = 1;
     this.widths[p] = 1;
-    this.groups[p] = group;
+    this.keyed[p] = false;
     this.skips[p] = null;
     return p;
   }
@@ -200,7 +196,7 @@ export class BeamWeapon {
     const heading = Math.atan2(first.y - y0, first.x - x0);
     const share = this.shares[p] * BEAM.refractShare;
     for (let side = -1; side <= 1; side += 2) {
-      const q = this.tracePath(first.x, first.y, heading + side * REFRACT_RAD, left, this.groupCount++);
+      const q = this.tracePath(first.x, first.y, heading + side * REFRACT_RAD, left);
       if (q < 0) continue;
       this.shares[q] = share;
       this.widths[q] = BEAM.refractWidth;
@@ -223,56 +219,48 @@ export class BeamWeapon {
   };
 
   /**
-   * Every enemy takes the tick's damage once per beam group it's in. The key itself counts as
-   * part of the aimed group, so an enemy pressed against the hero, short of the tip, is hit too.
-   * Only a released beam's first tick starts arc chains; a held one lets each enemy start one now and then.
+   * Every enemy takes the tick's damage once per beam touching it. The key itself counts as part
+   * of each aimed beam, so an enemy pressed against the hero, short of the tip, is hit too.
+   * Only a released beam's first tick starts arc chains; a held one lets each enemy start one now
+   * and then. Either way, an enemy starts at most one per tick, however many beams hit it.
    */
   private tick(player: Player, now: number) {
     const s = player.stats;
     this.tickDamage = beamTickDamage(s, this.power, this.continuous);
     // A held beam pushing every tick would pin enemies out of reach for free.
     this.tickKnockback = this.continuous ? 0 : s.knockback * BEAM.tickKnockback;
-    this.groupStamps.fill(-1);
     for (let e = 0; e < this.targets.length; e++) {
       const enemy = this.targets[e];
       const keyReach = this.beamWidth / 2 + ENEMY_RADIUS * enemy.def.scale;
       const onKey =
         segmentDistanceSq(enemy.x, enemy.y, player.keyGripX, player.keyGripY, player.keyTipX, player.keyTipY) <=
         keyReach * keyReach;
-      this.hitAlongPaths(player, e, onKey, now);
+      this.hitAlongPaths(player, enemy, onKey, now);
     }
     this.host.piles.strikeWhere(this.pileShare, this.tickDamage);
     this.nextTickAt += BEAM.tickMs;
     this.firstTick = false;
   }
 
-  /** Combined damage share at a pile's middle, counting each touching beam group once as for enemies. */
+  /** Combined damage share at a pile's middle, counting each touching beam as for enemies. */
   private readonly pileShare = (x: number, y: number): number => {
-    this.groupStamps.fill(-1);
     let share = 0;
     for (let p = 0; p < this.pathCount; p++) {
-      const group = this.groups[p];
-      if (this.groupStamps[group] === 0) continue;
       const radius = (this.beamWidth * this.widths[p]) / 2 + PILE_RADIUS;
-      if (!pathTouches(this.paths[p], this.pointCounts[p], x, y, radius)) continue;
-      this.groupStamps[group] = 0;
-      share += this.shares[p];
+      if (pathTouches(this.paths[p], this.pointCounts[p], x, y, radius)) share += this.shares[p];
     }
     return share;
   };
 
-  /** Strikes target `e` once for each beam group whose path touches it. */
-  private hitAlongPaths(player: Player, e: number, onKey: boolean, now: number) {
-    const enemy = this.targets[e];
+  /** Strikes `enemy` once for each beam whose path touches it. */
+  private hitAlongPaths(player: Player, enemy: Enemy, onKey: boolean, now: number) {
     const body = ENEMY_RADIUS * enemy.def.scale;
     for (let p = 0; p < this.pathCount; p++) {
-      const group = this.groups[p];
-      if (!enemy.active || this.groupStamps[group] === e || this.skips[p] === enemy) continue;
+      if (!enemy.active || this.skips[p] === enemy) continue;
       const radius = (this.beamWidth * this.widths[p]) / 2 + body;
       const touches =
-        (group === 0 && onKey) || pathTouches(this.paths[p], this.pointCounts[p], enemy.x, enemy.y, radius);
+        (this.keyed[p] && onKey) || pathTouches(this.paths[p], this.pointCounts[p], enemy.x, enemy.y, radius);
       if (!touches) continue;
-      this.groupStamps[group] = e;
       this.strike(player, enemy, this.tickDamage * this.shares[p], this.tickKnockback, now);
     }
   }
@@ -285,9 +273,10 @@ export class BeamWeapon {
     this.chain.trigger(player.stats, enemy, x, y, damage, now);
   }
 
+  /** The cooldown also keeps the other beams hitting this enemy in the same tick from chaining again. */
   private startsChain(enemy: Enemy, now: number): boolean {
-    if (this.continuous) return now >= enemy.chainReadyAt;
-    return this.firstTick;
+    if (now < enemy.chainReadyAt) return false;
+    return this.continuous || this.firstTick;
   }
 
   /** Early releases are thinner, so a weak beam reads as weak. */
