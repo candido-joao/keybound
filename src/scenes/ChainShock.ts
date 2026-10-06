@@ -13,6 +13,8 @@ export interface StrikeHost {
   liveEnemies(): Enemy[];
   /** Applies the damage and any kill. */
   strikeEnemy(enemy: Enemy, damage: number, fromX: number, fromY: number, knockback: number): void;
+  /** Bone piles, which take hits too though they aren't enemies. */
+  readonly piles: { strikeWhere(struck: (x: number, y: number) => boolean | number, damage: number): void };
 }
 
 const ARC_MS = 120;

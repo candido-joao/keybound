@@ -229,6 +229,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     p.add.collider(this.enemies, pits, undefined, (e) => !(e as Enemy).def.flies);
     p.add.collider(this.enemies, this.enemies, undefined, (a, b) => !(a as Enemy).def.ghost && !(b as Enemy).def.ghost);
     const { bolts, hit } = this.shots;
+    this.piles.collide(this.player, bolts);
     p.add.collider(bolts, [walls, doorBlocks, solid], (bolt) => (bolt as Bolt).burst());
     p.add.overlap(bolts, this.enemies, (b, e) => hit(b as Bolt, e as Enemy));
     p.add.collider(this.orbs, [walls, doorBlocks, solid], (orb) => (orb as HostileOrb).release());

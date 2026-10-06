@@ -75,9 +75,11 @@ export interface BlinkMove {
   volley?: boolean;
 }
 
-/** Falls into a pile instead of dying, and gets back up unless the player steps on the pile first. */
+/** Falls into a pile instead of dying, and gets back up unless the player breaks the pile first. */
 export interface Revive {
   delayMs: number;
+  /** Damage that breaks the pile for good; the pile blocks the player meanwhile. */
+  pileHp: number;
   /** Share of max HP it gets back up with. */
   hpShare: number;
   /** How many times it gets back up; the death after that is for good. */
@@ -216,7 +218,7 @@ export const SHADOW_CASTER: EnemyDef = {
   deathColor: 0x3a1f4a,
 };
 
-/** Slow and frail, but it gets back up once, unless the player steps on the bones first. */
+/** Slow and frail, but it gets back up once, unless the player breaks the bones first. */
 export const BONES: EnemyDef = {
   id: 'bones',
   name: 'enemy.bones',
@@ -230,7 +232,8 @@ export const BONES: EnemyDef = {
   contactDamage: 10,
   boss: false,
   attacks: [],
-  revive: { delayMs: 4000, hpShare: 0.5, times: 1 },
+  // Two plain bolts break the pile.
+  revive: { delayMs: 4000, pileHp: 7, hpShare: 0.5, times: 1 },
   deathColor: 0xb8ab84,
 };
 

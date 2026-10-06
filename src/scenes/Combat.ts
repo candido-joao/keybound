@@ -106,6 +106,7 @@ export class Combat {
     }
     // A rock counts as caught once the blast reaches its middle.
     game.breakRocks((rx, ry) => inBlast(rx - x, ry - y, blast.radius));
+    game.piles.strikeWhere((px, py) => inBlast(px - x, py - y, blast.radius), Infinity);
     if (enemy.active) this.kill(enemy);
   };
 

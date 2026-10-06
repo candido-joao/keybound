@@ -263,7 +263,8 @@ export const es = {
   'wiki.attack.summon': 'Invoca {min}–{max} copias de {name}',
   'wiki.attack.explode': 'Se detiene cerca de ti y explota: {damage} de daño en área, enemigos incluidos',
   'wiki.trait.boss': 'Los disparos no lo empujan',
-  'wiki.trait.revive': 'Se levanta tras {s}s con {pct}% de vida, salvo que pises los huesos antes',
+  'wiki.trait.revive':
+    'Se levanta tras {s}s con {pct}% de vida, salvo que rompas los huesos antes ({hp} de daño; bloquean el paso)',
   'wiki.trait.trail': 'Sus embestidas dejan charcos de sangre que hacen {damage} de daño durante {s}s',
   'wiki.trait.fade': 'Aparece y desaparece; oculto, ni hace ni recibe daño',
   'wiki.trait.blink': 'Se teletransporta lejos cuando te acercas',

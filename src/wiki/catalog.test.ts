@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { POOL_DEPTH } from '../combat/balance';
 import {
   BLOOD_COLOSSUS,
+  BONES,
   CRYSTAL_SENTINEL,
   CRYSTAL_SHARD,
   ENEMIES,
@@ -60,6 +61,11 @@ describe('enemy lines', () => {
   it('describes the Colossus dash, volley and fury', () => {
     const keys = enemyLines(SHADOW_COLOSSUS).map((l) => l.key);
     expect(keys).toEqual(['wiki.attack.dash', 'wiki.attack.volley.fan', 'wiki.trait.boss', 'wiki.trait.fury']);
+  });
+
+  it('says how much damage breaks a bone pile', () => {
+    const revive = enemyLines(BONES).find((l) => l.key === 'wiki.trait.revive');
+    expect(revive?.params).toMatchObject({ hp: BONES.revive!.pileHp });
   });
 
   it('warns of the Crimson Colossus blood trail', () => {
