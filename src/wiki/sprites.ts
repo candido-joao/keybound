@@ -1,6 +1,7 @@
 import { ENEMY_FRAME, ENEMY_WALK_FPS, type EnemyDef, walkFrames } from '../combat/enemies';
 import { fadeState } from '../combat/behaviors';
 import { PLACEHOLDER_BODY, placeholderColors } from '../combat/placeholderArt';
+import { ITEM_ICON_FPS } from '../combat/items';
 import { type Item, baseId } from '../combat/stats';
 
 /** Art is drawn at whole multiples so the pixels stay square. */
@@ -92,10 +93,20 @@ export function itemIcon(item: Item): HTMLImageElement {
   img.className = 'icon';
   img.alt = '';
   img.src = asset(`items/${baseId(item)}.png`);
+  img.onload = () => animateStrip(img);
   img.onerror = () => {
     img.replaceWith(itemOrb(item));
   };
   return img;
+}
+
+/** A strip of square frames loops at the game's pace; a single frame stays still. */
+function animateStrip(img: HTMLImageElement) {
+  const frames = Math.round(img.naturalWidth / img.naturalHeight);
+  if (frames < 2) return;
+  img.classList.add('strip');
+  img.style.setProperty('--frames', `${frames}`);
+  img.style.setProperty('--strip-duration', `${frames / ITEM_ICON_FPS}s`);
 }
 
 /** The game's fallback for a missing icon: an orb in the item's color. */
