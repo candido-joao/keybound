@@ -364,6 +364,9 @@ a {
   width: 64px;
   height: 64px;
   image-rendering: pixelated;
+  /* Animated icons are frame strips: show the first frame. */
+  object-fit: cover;
+  object-position: left;
 }
 
 .orb {
