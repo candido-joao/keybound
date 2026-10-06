@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, TILE } from '../config';
 import { SWING, inSwing, swingTouchesBox } from '../combat/swing';
 import { SWING_FX, SWING_FX_FRAME } from '../entities/keyArt';
+import { PILE_RADIUS } from './BonePiles';
 import type { GameScene } from './GameScene';
 
 /**
@@ -26,6 +27,8 @@ export function swingKey(game: GameScene) {
   }
   game.layout.swingAt(x, y, aim);
   game.breakRocks((rx, ry) => swingTouchesBox(rx - x, ry - y, aim, TILE / 2, TILE / 2));
+  // The full blow of the key scatters bones outright.
+  game.piles.strikeWhere((px, py) => inSwing(px - x, py - y, aim, PILE_RADIUS), Infinity);
 }
 
 /** The crescent rides the fan's far edge, turned to the aim. */

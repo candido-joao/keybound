@@ -259,7 +259,8 @@ export const enUS = {
   'wiki.attack.summon': 'Calls in {min}–{max} copies of {name}',
   'wiki.attack.explode': 'Stops near you and blows up: {damage} area damage, enemies included',
   'wiki.trait.boss': "Shots don't push it",
-  'wiki.trait.revive': 'Gets back up after {s}s with {pct}% HP, unless you step on the bones first',
+  'wiki.trait.revive':
+    'Gets back up after {s}s with {pct}% HP, unless you break the bones first ({hp} damage; they block your way)',
   'wiki.trait.fade': 'Fades in and out; while hidden it neither hurts nor takes hits',
   'wiki.trait.blink': 'Teleports away when you come close',
   'wiki.trait.blink-volley': 'Teleports away when you get close, and attacks the moment it reappears',

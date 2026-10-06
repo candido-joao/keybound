@@ -260,7 +260,8 @@ export const ptBR = {
   'wiki.attack.summon': 'Invoca {min}–{max} cópias de {name}',
   'wiki.attack.explode': 'Para perto de você e explode: {damage} de dano em área, inimigos inclusos',
   'wiki.trait.boss': 'Tiros não o empurram',
-  'wiki.trait.revive': 'Levanta após {s}s com {pct}% do HP, a menos que você pise nos ossos antes',
+  'wiki.trait.revive':
+    'Levanta após {s}s com {pct}% do HP, a menos que você quebre a ossada antes ({hp} de dano; ela bloqueia a passagem)',
   'wiki.trait.fade': 'Some e reaparece; sumido, não causa nem leva dano',
   'wiki.trait.blink': 'Teleporta para longe quando você chega perto',
   'wiki.trait.blink-volley': 'Teleporta para longe quando você chega perto e ataca assim que reaparece',

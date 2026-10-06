@@ -110,7 +110,10 @@ function bossLines(def: EnemyDef): Line[] {
     lines.push({ key: 'wiki.trait.fury', params: { pct: pct(def.fury.hpShare), damage: def.fury.dash.damage } });
   }
   if (def.revive) {
-    lines.push({ key: 'wiki.trait.revive', params: { s: seconds(def.revive.delayMs), pct: pct(def.revive.hpShare) } });
+    lines.push({
+      key: 'wiki.trait.revive',
+      params: { s: seconds(def.revive.delayMs), pct: pct(def.revive.hpShare), hp: def.revive.pileHp },
+    });
   }
   return lines;
 }

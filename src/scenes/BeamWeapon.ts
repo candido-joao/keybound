@@ -16,6 +16,7 @@ import { ECHO_OFFSETS, directionOffset, fanAngle, shotsInDirection } from '../co
 import { ROOM_H, ROOM_W, ROOM_X, ROOM_Y, TILE } from '../config';
 import type { Enemy } from '../entities/Enemy';
 import type { BeamTrigger, Player } from '../entities/Player';
+import { PILE_RADIUS } from './BonePiles';
 import type { ChainShock, StrikeHost } from './ChainShock';
 
 /** Homing bends the beam as much per px as it turns a bolt flying at base speed. */
@@ -240,9 +241,19 @@ export class BeamWeapon {
         keyReach * keyReach;
       this.hitAlongPaths(player, e, onKey, now);
     }
+    this.host.piles.strikeWhere(this.inBeam, this.tickDamage);
     this.nextTickAt += BEAM.tickMs;
     this.firstTick = false;
   }
+
+  /** Whether any path touches a bone pile at (`x`, `y`); a pile takes one tick's damage however many do. */
+  private readonly inBeam = (x: number, y: number): boolean => {
+    for (let p = 0; p < this.pathCount; p++) {
+      const radius = (this.beamWidth * this.widths[p]) / 2 + PILE_RADIUS;
+      if (pathTouches(this.paths[p], this.pointCounts[p], x, y, radius)) return true;
+    }
+    return false;
+  };
 
   /** Strikes target `e` once for each beam group whose path touches it. */
   private hitAlongPaths(player: Player, e: number, onKey: boolean, now: number) {
