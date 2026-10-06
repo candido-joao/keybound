@@ -54,6 +54,8 @@ export interface DebugTarget {
   /** Sets every enemy's HP to `percent` of its max; returns how many changed. */
   setEnemyHealth(percent: number): number;
   goToFloor(depth: number): void;
+  /** Takes the player into this floor's boss room, boss and intro included; false when already there. */
+  goToBossRoom(): boolean;
   revealMap(): void;
   /** Replays the current room as that event; false when the room's type can't hold it. */
   startEvent(eventId: string): boolean;
@@ -212,6 +214,13 @@ export const COMMANDS: readonly Command[] = [
       t.spawnBoss();
       return ['boss spawned'];
     },
+  },
+  {
+    name: 'bossroom',
+    args: [],
+    summary: "go to this floor's boss room",
+    cheat: true,
+    run: (t) => [t.goToBossRoom() ? 'boss room' : 'already in the boss room'],
   },
   {
     name: 'kill',

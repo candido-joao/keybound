@@ -335,7 +335,8 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     this.inBossIntro = true;
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.physics.pause();
-    const data: BossIntroData = { name: boss.name, x, y };
+    const pose = (on: boolean) => this.enemyGroup().forEach((enemy) => enemy.def.boss && enemy.introPose(on));
+    const data: BossIntroData = { name: boss.name, x, y, pose };
     this.scene.launch('boss-intro', data);
     this.scene.bringToTop('boss-intro');
   }

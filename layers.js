@@ -12,6 +12,7 @@ export const PHASER_LAYER = [
   'src/entities/EnemyEyes.ts',
   'src/entities/EnemyFury.ts',
   'src/entities/EnemyOutline.ts',
+  'src/entities/EnemyVolley.ts',
   'src/entities/HostileOrb.ts',
   'src/entities/Player.ts',
   'src/debug/DebugConsole.ts',
