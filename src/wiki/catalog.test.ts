@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { POOL_DEPTH } from '../combat/balance';
-import { CRYSTAL_SENTINEL, CRYSTAL_SHARD, ENEMIES, SHADOW_COLOSSUS, type VolleyAttack } from '../combat/enemies';
+import {
+  BLOOD_COLOSSUS,
+  CRYSTAL_SENTINEL,
+  CRYSTAL_SHARD,
+  ENEMIES,
+  SHADOW_COLOSSUS,
+  type VolleyAttack,
+} from '../combat/enemies';
 import { ITEMS } from '../combat/items';
 import { baseId } from '../combat/stats';
 import { RUN_FLOORS } from '../floor/phases';
@@ -53,6 +60,11 @@ describe('enemy lines', () => {
   it('describes the Colossus dash, volley and fury', () => {
     const keys = enemyLines(SHADOW_COLOSSUS).map((l) => l.key);
     expect(keys).toEqual(['wiki.attack.dash', 'wiki.attack.volley.fan', 'wiki.trait.boss', 'wiki.trait.fury']);
+  });
+
+  it('warns of the Crimson Colossus blood trail', () => {
+    const trail = enemyLines(BLOOD_COLOSSUS).find((l) => l.key === 'wiki.trait.trail');
+    expect(trail?.params).toEqual({ s: BLOOD_COLOSSUS.trail!.lifeMs / 1000, damage: BLOOD_COLOSSUS.trail!.damage });
   });
 
   it('tells a ring, a burst and a single orb apart', () => {

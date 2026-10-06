@@ -84,6 +84,16 @@ export interface Revive {
   times: number;
 }
 
+/** Every dash, calm or furious, leaves a line of puddles that hurt the player until they dry. */
+export interface BloodTrail {
+  /** A puddle this often while the dash lasts. */
+  everyMs: number;
+  radius: number;
+  /** How long a puddle stays, the fade before it dries included. */
+  lifeMs: number;
+  damage: number;
+}
+
 /**
  * A harder second phase. Past the HP threshold the enemy turns invulnerable for the
  * transition, then trades its normal dash for a furious one that ricochets off walls.
@@ -153,6 +163,7 @@ export interface EnemyDef {
   fade?: FadeCycle;
   blink?: BlinkMove;
   revive?: Revive;
+  trail?: BloodTrail;
   /** Breaks into `count` plain `id` enemies when it dies. */
   split?: { id: string; count: number };
   /** Color of a silhouette drawn around the body; cursed enemies get one. */
@@ -297,17 +308,18 @@ function tweakAttacks(def: EnemyDef, changes: AttackChanges): EnemyAttack[] {
   return def.attacks.map((attack) => ({ ...attack, ...changes[attack.kind] }) as EnemyAttack);
 }
 
-/** Dashes more often, and its volley comes in two fans. */
+/**
+ * Bleeds where it dashes: each lunge leaves puddles that hurt, so the floor safe to dodge on
+ * shrinks as the fight goes on. Its volley comes in two fans.
+ */
 export const BLOOD_COLOSSUS = bossVariant(SHADOW_COLOSSUS, {
   id: 'blood-colossus',
   name: 'boss.blood-colossus',
   texture: 'blood-colossus',
   deathColor: 0x5a1414,
-  speed: 80,
-  attacks: tweakAttacks(SHADOW_COLOSSUS, {
-    dash: { everyMs: 1500, telegraphMs: 340 },
-    volley: { shots: 2, shotGapMs: 350 },
-  }),
+  attacks: tweakAttacks(SHADOW_COLOSSUS, { volley: { shots: 2, shotGapMs: 350 } }),
+  // A puddle every ~28 px of a calm dash, wider than that apart, so the line reads unbroken.
+  trail: { everyMs: 60, radius: 22, lifeMs: 4500, damage: 5 },
 });
 
 /**
@@ -969,3 +981,6 @@ export const walkAnimKey = (texture: string) => `walk:${texture}`;
 /** What a revived enemy leaves on the floor; its strip loops like a walk. */
 export const BONE_PILE = 'bone-pile';
 export const BONE_PILE_FRAMES = 3;
+
+/** What a bleeding enemy's trail leaves on the floor. */
+export const BLOOD_PUDDLE = 'blood-puddle';
