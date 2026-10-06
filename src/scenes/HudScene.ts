@@ -430,7 +430,8 @@ export class HudScene extends Phaser.Scene {
     [...countItems(items)].forEach(([item, n], i) => {
       const x = ICONS_X + (i % ICONS_PER_ROW) * (ICON_SIZE + ICON_GAP) + ICON_SIZE / 2;
       const y = ICONS_Y + Math.floor(i / ICONS_PER_ROW) * (ICON_SIZE + ICON_GAP) + ICON_SIZE / 2;
-      this.icons.push(addItemIcon(this, x, y, item).setAlpha(0.55));
+      // Collected items sit still; only the ones still up for grabs loop.
+      this.icons.push(addItemIcon(this, x, y, item, false).setAlpha(0.55));
       if (n > 1) {
         const count = this.add.text(x + ICON_SIZE / 2, y + ICON_SIZE / 2, `${n}`, {
           fontFamily: 'monospace',
