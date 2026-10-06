@@ -3,6 +3,10 @@ import { type Item, type PlayerStats, baseId } from './stats';
 /** Loaded from public/items/<base id>.png by BootScene; variants look like their base, so the pedestal doesn't give them away. */
 export const itemTextureKey = (item: Item) => `item:${baseId(item)}`;
 
+/** Icon art is a horizontal strip of square frames; a strip with more than one loops (see `addItemIcon`). */
+export const ITEM_ICON_SIZE = 32;
+export const ITEM_ICON_FPS = 3;
+
 /** Pure items weigh 1 against their variants: a subtle variant 2, an extreme one 1. */
 const PURE = 1;
 const SUBTLE = 2;

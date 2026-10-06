@@ -20,8 +20,19 @@ export function debugTarget(game: GameScene): DebugTarget {
     killAll: () => killAll(game),
     setEnemyHealth: (percent) => setEnemyHealth(game, percent),
     goToFloor: (depth) => game.scene.restart(game.carryOver(depth)),
+    goToBossRoom: () => goToBossRoom(game),
     startEvent: (eventId) => startEvent(game, eventId as RoomEventId),
   };
+}
+
+/** Walks in from below, as through a door, so the boss doesn't rise on top of the player. */
+function goToBossRoom(game: GameScene): boolean {
+  const room = [...game.floor.rooms.values()].find((r) => r.type === 'boss');
+  if (!room || room === game.room) return false;
+  game.enterRoom(room, 'up');
+  // Replay a cleared room's boss and intro without resetting its rewards or completion.
+  if (room.cleared) game.spawner.fill(room);
+  return true;
 }
 
 /** Returns callbacks that read current run state when invoked, even after console commands change it. */

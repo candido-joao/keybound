@@ -5,10 +5,11 @@ import {
   ENEMIES,
   ENEMY_FRAME,
   ENEMY_WALK_FPS,
+  type EnemyDef,
   walkAnimKey,
   walkFrames,
 } from '../combat/enemies';
-import { ITEMS, itemTextureKey } from '../combat/items';
+import { ITEMS, ITEM_ICON_FPS, ITEM_ICON_SIZE, itemTextureKey } from '../combat/items';
 import { COLORS, ROOM_H, ROOM_W, TILE } from '../config';
 import { PORTRAIT_KEYHOLE, WEAPON_SLOT, cssColor, keyholeOutline, traceKeyhole } from '../ui/hpGauge';
 import { hasLaunchParams, parseLaunchParams, runFromParams } from '../core/run';
@@ -58,7 +59,8 @@ export class BootScene extends Phaser.Scene {
 
   preload() {
     // Variants reuse their base's icon.
-    for (const item of ITEMS) if (!item.base) this.load.image(itemTextureKey(item), `items/${item.id}.png`);
+    const icon = { frameWidth: ITEM_ICON_SIZE, frameHeight: ITEM_ICON_SIZE };
+    for (const item of ITEMS) if (!item.base) this.load.spritesheet(itemTextureKey(item), `items/${item.id}.png`, icon);
     this.load.image(KEY_ART, 'weapons/key.png');
     this.load.image(KEY_TITLE_ART, 'weapons/key-title.png');
     this.load.image(KEY_ICON_ART, 'weapons/key-icon.png');
@@ -69,12 +71,18 @@ export class BootScene extends Phaser.Scene {
     });
     this.load.spritesheet(HERO_SHEET, 'hero/walk.png', { frameWidth: HERO_FRAME_W, frameHeight: HERO_FRAME_H });
     const frame = { frameWidth: ENEMY_FRAME, frameHeight: ENEMY_FRAME };
-    for (const def of ENEMIES) if (def.frames) this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, frame);
+    for (const def of ENEMIES) if (def.frames) this.loadEnemy(def);
     this.load.spritesheet(BONE_PILE, `enemies/${BONE_PILE}.png`, frame);
     for (const [key, file] of this.obstacleArt) this.load.image(key, file);
   }
 
   /** Prepare animations and baked textures, including missing-art fallbacks, before launching the game scenes. */
+  private loadEnemy(def: EnemyDef) {
+    const side = def.frameSize ?? ENEMY_FRAME;
+    this.load.spritesheet(def.texture, `enemies/${def.texture}.png`, { frameWidth: side, frameHeight: side });
+    if (def.introPose) this.load.image(`${def.texture}-intro`, `enemies/${def.texture}-intro.png`);
+  }
+
   create() {
     // The hero and key art are smooth downscales, not native pixel art: nearest sampling would break them up.
     for (const key of [KEY_ART, KEY_TITLE_ART, KEY_ICON_ART, HERO_SHEET, SWING_FX]) {
@@ -83,6 +91,7 @@ export class BootScene extends Phaser.Scene {
     this.createHeroAnims();
     this.createEnemyAnims();
     this.createSwingAnim();
+    this.createItemAnims();
 
     bakeFallbackArt(this);
     this.slicePit();
@@ -175,6 +184,18 @@ export class BootScene extends Phaser.Scene {
         repeat: -1,
       });
     }
+  }
+
+  /** An icon strip loops under its texture key; a single-frame icon gets no animation. */
+  private createItemAnims() {
+    for (const item of ITEMS) if (!item.base) this.createItemLoop(itemTextureKey(item));
+  }
+
+  private createItemLoop(key: string) {
+    if (!this.textures.exists(key)) return;
+    // frameTotal counts Phaser's whole-image __BASE frame too.
+    if (this.textures.get(key).frameTotal <= 2) return;
+    this.anims.create({ key, frames: this.anims.generateFrameNumbers(key), frameRate: ITEM_ICON_FPS, repeat: -1 });
   }
 
   private createEnemyAnims() {

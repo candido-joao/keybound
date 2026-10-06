@@ -1,6 +1,7 @@
 import { ENEMY_FRAME, ENEMY_WALK_FPS, type EnemyDef, walkFrames } from '../combat/enemies';
 import { fadeState } from '../combat/behaviors';
 import { PLACEHOLDER_BODY, placeholderColors } from '../combat/placeholderArt';
+import { ITEM_ICON_FPS } from '../combat/items';
 import { type Item, baseId } from '../combat/stats';
 
 /** Art is drawn at whole multiples so the pixels stay square. */
@@ -48,12 +49,13 @@ export function enemySprite(def: EnemyDef): HTMLCanvasElement {
 }
 
 /** Draw a zero-based frame from a horizontal enemy strip without smoothing; skip unavailable images or contexts. */
-function drawFrame({ canvas, image }: Animated, frame: number) {
+function drawFrame({ canvas, image, def }: Animated, frame: number) {
   const ctx = canvas.getContext('2d');
   if (!ctx || !image) return;
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(image, frame * ENEMY_FRAME, 0, ENEMY_FRAME, ENEMY_FRAME, 0, 0, canvas.width, canvas.height);
+  const side = def.frameSize ?? ENEMY_FRAME;
+  ctx.drawImage(image, frame * side, 0, side, side, 0, 0, canvas.width, canvas.height);
 }
 
 /** The same stand-in body the game bakes, centered in a frame-sized box. */
@@ -91,10 +93,20 @@ export function itemIcon(item: Item): HTMLImageElement {
   img.className = 'icon';
   img.alt = '';
   img.src = asset(`items/${baseId(item)}.png`);
+  img.onload = () => animateStrip(img);
   img.onerror = () => {
     img.replaceWith(itemOrb(item));
   };
   return img;
+}
+
+/** A strip of square frames loops at the game's pace; a single frame stays still. */
+function animateStrip(img: HTMLImageElement) {
+  const frames = Math.round(img.naturalWidth / img.naturalHeight);
+  if (frames < 2) return;
+  img.classList.add('strip');
+  img.style.setProperty('--frames', `${frames}`);
+  img.style.setProperty('--strip-duration', `${frames / ITEM_ICON_FPS}s`);
 }
 
 /** The game's fallback for a missing icon: an orb in the item's color. */
