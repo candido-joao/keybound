@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { BONE_PILE, ENEMIES } from '../combat/enemies';
+import { BLOOD_PUDDLE, BONE_PILE, ENEMIES } from '../combat/enemies';
 import { PLACEHOLDER_BODY, type PlaceholderColors, placeholderColors } from '../combat/placeholderArt';
 import { COLORS, TILE } from '../config';
 import { obstacleDef, obstacleTexture } from '../floor/obstacles';
@@ -178,6 +178,10 @@ function bakeEnemies(baker: Baker) {
   baker.bakeMissing(BONE_PILE, 32, 32, (g) => {
     g.fillStyle(0xb8ab84).fillEllipse(16, 24, 26, 10);
     g.fillStyle(0xd8cfb0).fillCircle(16, 18, 6);
+  });
+  baker.bakeMissing(BLOOD_PUDDLE, 32, 32, (g) => {
+    g.fillStyle(0x6e0f12, 0.85).fillCircle(16, 16, 16);
+    g.fillStyle(0xa3161b, 0.9).fillCircle(14, 14, 10);
   });
 }
 
