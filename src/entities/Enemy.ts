@@ -45,6 +45,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   hp: number;
   /** Times it has got back up from a bone pile. */
   revivals = 0;
+  /** Split off or summoned by another enemy: it drops no coins, else a summoner would be a coin farm. */
+  offspring = false;
   readonly def: EnemyDef;
   /** Its own art may be drawn bigger than the placeholder: `def.scale` turned into the sprite's scale. */
   private readonly baseScale: number;

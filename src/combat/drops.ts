@@ -56,10 +56,16 @@ export function applyDrop(state: PickupState, kind: DropKind, coinValue = 1): Pi
   return { ...state, health: Math.min(state.maxHealth, state.health + healOrbHp(state.maxHealth)) };
 }
 
-/** What one kill drops, and the luck after it. */
-export function rollDrops(rng: Rng, luck: DropLuck, healBonus = 0): { drops: DropKind[]; luck: DropLuck } {
+/** What one kill drops, and the luck after it; `coins` false for an enemy that never pays out coins. */
+export function rollDrops(
+  rng: Rng,
+  luck: DropLuck,
+  healBonus = 0,
+  coins = true,
+): { drops: DropKind[]; luck: DropLuck } {
   const drops: DropKind[] = [];
-  if (rng.chance(DROP_ODDS.currency)) drops.push('currency');
+  // Rolled either way, so the heal roll after it draws the same number.
+  if (rng.chance(DROP_ODDS.currency) && coins) drops.push('currency');
   if (!rng.chance(healChance(luck, healBonus))) return { drops, luck: { healMisses: luck.healMisses + 1 } };
   drops.push('heal');
   return { drops, luck: FRESH_LUCK };

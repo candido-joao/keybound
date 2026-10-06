@@ -88,4 +88,13 @@ describe('rollDrops', () => {
   it('always drops a heal orb once the odds are certain', () => {
     expect(rollDrops(new Rng('sure'), { healMisses: 1000 }).drops).toContain('heal');
   });
+
+  it('drops no coins for an enemy that pays none, and rolls the heal the same', () => {
+    for (let i = 0; i < 50; i++) {
+      const paying = rollDrops(new Rng(`coins:${i}`), FRESH_LUCK);
+      const unpaid = rollDrops(new Rng(`coins:${i}`), FRESH_LUCK, 0, false);
+      expect(unpaid.drops).not.toContain('currency');
+      expect(unpaid.drops.includes('heal')).toBe(paying.drops.includes('heal'));
+    }
+  });
 });

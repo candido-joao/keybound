@@ -24,6 +24,8 @@ interface Pile {
   rattling: boolean;
   /** Times the enemy under it has already got back up. */
   revivals: number;
+  /** The enemy under it was summoned: it stays that way when it gets up, and pays no coins. */
+  offspring: boolean;
 }
 
 /** Bone piles in this room; the room isn't clear while any is left. */
@@ -55,7 +57,7 @@ export class BonePiles {
     this.piles = [];
   }
 
-  drop(def: EnemyDef, x: number, y: number, revivals: number) {
+  drop(def: EnemyDef, x: number, y: number, revivals: number, offspring: boolean) {
     const { anims, clock } = this.game;
     const image = this.bodies.create(x, y, BONE_PILE) as Phaser.Physics.Arcade.Sprite;
     image.setDepth(3);
@@ -67,7 +69,16 @@ export class BonePiles {
     const anim = walkAnimKey(BONE_PILE);
     if (anims.exists(anim)) for (const part of parts) part.play(anim);
     const { delayMs, pileHp } = def.revive!;
-    this.piles.push({ def, image, parts, hp: pileHp, reviveAt: clock.now + delayMs, rattling: false, revivals });
+    this.piles.push({
+      def,
+      image,
+      parts,
+      hp: pileHp,
+      reviveAt: clock.now + delayMs,
+      rattling: false,
+      revivals,
+      offspring,
+    });
   }
 
   private outline(color: number, x: number, y: number, depth: number): Phaser.GameObjects.Sprite {
@@ -147,6 +158,7 @@ export class BonePiles {
     const enemy = this.game.spawner.spawn(def, image.x, image.y, this.game.dropRng.next() * 1000);
     enemy.hp = reviveHp(def.hp, def.revive!.hpShare);
     enemy.revivals = pile.revivals + 1;
+    enemy.offspring = pile.offspring;
   }
 
   /** Broken for good: it stops blocking at once, then falls apart. */
@@ -162,6 +174,6 @@ export class BonePiles {
       duration: 160,
       onComplete: () => parts.forEach((part) => part.destroy()),
     });
-    this.game.combat.reward(def, image.x, image.y);
+    this.game.combat.reward(def, image.x, image.y, !pile.offspring);
   }
 }
