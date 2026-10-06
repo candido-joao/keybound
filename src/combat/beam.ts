@@ -7,20 +7,21 @@ import type { PlayerStats } from './stats';
  */
 export const BEAM = {
   /** Charge time per ms of fire delay. */
-  chargePerFireDelay: 2,
+  chargePerFireDelay: 1.5,
   /** At or under this charge time, holding keeps the beam on instead of charging it. */
   continuousChargeMs: 500,
   durationMs: 400,
   tickMs: 100,
   /**
    * A full release deals this many shots' worth of damage, spread over its ticks. The charge and
-   * the beam take about 2.4 shots' worth of time; the rest pays for not firing while charging.
+   * the beam take about 1.9 shots' worth of time; the rest pays for the short reach and for not
+   * firing while charging.
    */
-  shotsPerBeam: 4,
+  shotsPerBeam: 3.5,
   /** A continuous beam's damage per second against the bolts it replaces. */
   continuousShare: 0.6,
   /** Reach as a share of the bolts' range: hits hard, so it has to be used up close. */
-  rangeShare: 0.6,
+  rangeShare: 0.75,
   /** Extra reach for a held beam that homes: bending toward targets eats into how far it gets. */
   homingContinuousReach: 0.25,
   /** Charge stages; the key flashes on reaching each one, and the last is full. */
@@ -28,7 +29,7 @@ export const BEAM = {
   /** Below this share of the charge, letting go fires nothing. */
   minCharge: 0.25,
   /** A beam released early deals this share of what its charge would be worth. */
-  earlyEfficiency: 0.5,
+  earlyEfficiency: 0.75,
   /** Width at bolt scale 1, px. */
   width: 14,
   /** Path step; the beam can only bend between steps. */
