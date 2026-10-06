@@ -30,6 +30,8 @@ function goToBossRoom(game: GameScene): boolean {
   const room = [...game.floor.rooms.values()].find((r) => r.type === 'boss');
   if (!room || room === game.room) return false;
   game.enterRoom(room, 'up');
+  // Replay a cleared room's boss and intro without resetting its rewards or completion.
+  if (room.cleared) game.spawner.fill(room);
   return true;
 }
 
