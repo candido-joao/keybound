@@ -56,6 +56,15 @@ const TWIN_NAMES: Record<string, MessageKey> = {
   'shadow-colossus': 'boss.shadow-colossus-twins',
   'crystal-colossus': 'boss.crystal-colossus-twins',
   'gear-colossus': 'boss.gear-colossus-twins',
+  'blood-colossus': 'boss.blood-colossus-twins',
+  'bone-king': 'boss.bone-king-twins',
+  wraith: 'boss.wraith-twins',
+  'crystal-hydra': 'boss.crystal-hydra-twins',
+  'crystal-matriarch': 'boss.crystal-matriarch-twins',
+  'shard-king': 'boss.shard-king-twins',
+  clockmaker: 'boss.clockmaker-twins',
+  'brass-titan': 'boss.brass-titan-twins',
+  'pendulum-wraith': 'boss.pendulum-wraith-twins',
 };
 
 /** A mini boss's name, by the plain enemy it grew from. */

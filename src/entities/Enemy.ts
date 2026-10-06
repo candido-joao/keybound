@@ -6,16 +6,17 @@ import {
   type EnemyDef,
   type ExplodeAttack,
   type SummonAttack,
-  type VolleyAttack,
   crossesFury,
   findAttack,
+  findAttacks,
   walkAnimKey,
 } from '../combat/enemies';
-import { RangeTrigger, fanAngle } from '../combat/volley';
+import { eyeSpots, spriteScale } from '../combat/placeholderArt';
 import type { GameClock } from '../core/clock';
 import { EnemyEyes } from './EnemyEyes';
 import { EnemyFury } from './EnemyFury';
 import { EnemyOutline, deathBurst } from './EnemyOutline';
+import { EnemyVolley } from './EnemyVolley';
 
 const SPAWN_MS = 550;
 
@@ -30,12 +31,9 @@ const FADE_FLICKER_MS = 70;
 /** An axis lunge ends at the first wall, but not on the one it may already be pressed against when it sets off. */
 const LUNGE_WALL_GRACE_MS = 60;
 
-/** Fires one enemy projectile; GameScene hands it out from its orb pool. */
-export interface Point {
-  x: number;
-  y: number;
-}
+export type Point = { x: number; y: number };
 
+/** Fires one enemy projectile; GameScene hands it out from its orb pool. */
 export type OrbShooter = (x: number, y: number, angle: number, speed: number, damage: number) => void;
 
 /**
@@ -47,6 +45,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   /** Times it has got back up from a bone pile. */
   revivals = 0;
   readonly def: EnemyDef;
+  /** Its own art may be drawn bigger than the placeholder: `def.scale` turned into the sprite's scale. */
+  private readonly baseScale: number;
   /** Set by GameScene from the player's items: scales walking and dashing, not the fury's fixed path. */
   speedScale = 1;
   /** Clock time from which a hit may start an arc chain again. */
@@ -77,9 +77,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   /** Set by GameScene: where a blink lands. Without it the enemy never blinks. */
   blinkTo?: (enemy: Enemy) => { x: number; y: number };
   private nextBlinkAt = 0;
-  /** Shots of the current burst still to fire, and when the next goes. */
-  private shotsLeft = 0;
-  private nextShotAt = Infinity;
 
   /** Set by GameScene; without it the enemy never fires. */
   shoot?: OrbShooter;
@@ -91,11 +88,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private nextSummonAt = Infinity;
   /** Pending summon: the swell ends here and the minions appear. */
   private summonAt = Infinity;
-  private volley?: VolleyAttack;
-  private rangeTrigger?: RangeTrigger;
-  private nextVolleyAt = 0;
-  /** Pending volley: the eye glow ends here and the orbs fly. */
-  private volleyFireAt = Infinity;
+  private readonly volleys?: EnemyVolley;
 
   private readonly eyes: EnemyEyes;
   /** Only for an enemy whose def has a fury phase. */
@@ -111,22 +104,44 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.clock = clock;
     this.wobbleSeed = wobbleSeed;
     this.hp = def.hp;
-    this.eyes = new EnemyEyes(this, def.scale);
+    this.baseScale = spriteScale(def, this.frame.width);
+    this.eyes = new EnemyEyes(this, eyeSpots(def, this.frame.width), this.baseScale);
     if (def.fury) this.fury = new EnemyFury(this, def.fury, this.eyes);
     const spawnMs = def.spawnMs ?? SPAWN_MS;
-    this.activeAt = clock.now + spawnMs;
+    this.activeAt = clock.now + spawnMs + (def.restMs ?? 0);
     this.explodeAttack = findAttack(def, 'explode');
     this.dash = findAttack(def, 'dash');
     if (this.dash) this.nextDashAt = this.activeAt + this.dash.everyMs;
-    this.volley = findAttack(def, 'volley');
-    if (this.volley) this.rangeTrigger = new RangeTrigger(this.volley);
+    const volleys = findAttacks(def, 'volley');
+    if (volleys.length > 0) this.volleys = new EnemyVolley(this, volleys, this.eyes);
     this.summonAttack = findAttack(def, 'summon');
     if (this.summonAttack) this.nextSummonAt = this.activeAt + this.summonAttack.everyMs;
-    this.setDepth(5).setScale(def.scale, 0.1).setAlpha(0);
+    this.setDepth(5).setScale(this.baseScale, 0.1).setAlpha(0);
     if (def.outline !== undefined) this.outline = new EnemyOutline(this, def.outline);
-    scene.tweens.add({ targets: this, scaleY: def.scale, alpha: 1, duration: spawnMs, ease: 'Back.Out' });
-    const walk = walkAnimKey(def.texture);
-    if (scene.anims.exists(walk)) this.play({ key: walk, startFrame: Math.floor(wobbleSeed) % 4 });
+    scene.tweens.add({ targets: this, scaleY: this.baseScale, alpha: 1, duration: spawnMs, ease: 'Back.Out' });
+    this.walkCycle();
+  }
+
+  private walkCycle() {
+    const walk = walkAnimKey(this.def.texture);
+    if (this.scene.anims.exists(walk)) this.play({ key: walk, startFrame: Math.floor(this.wobbleSeed) % 4 });
+  }
+
+  /**
+   * The boss intro's pose in place of the walk, feet where they stood; off, back to walking.
+   * Nothing changes for an enemy without one.
+   */
+  introPose(on: boolean) {
+    const pose = `${this.def.texture}-intro`;
+    if (!this.def.introPose || !this.scene.textures.exists(pose)) return;
+    if (!on) {
+      this.setTexture(this.def.texture).setOrigin(0.5);
+      this.walkCycle();
+      return;
+    }
+    const walkSize = this.frame.height;
+    this.stop().setTexture(pose);
+    this.setOrigin(0.5, 1 - walkSize / 2 / this.frame.height);
   }
 
   /** Call after joining the physics group. */
@@ -162,7 +177,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
     this.updateFade(time);
-    this.updateBurst(target, time);
+    this.volleys?.burst(target, time, this.shoot);
     if (this.updateExplode(target, time)) return;
 
     if (this.fury?.state === 'transition') {
@@ -189,20 +204,23 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.def.axisWalk) {
       const axis = dominantAxis(goal.x - this.x, goal.y - this.y);
       body.setVelocity(axis.x * speed, axis.y * speed);
-      this.face(body.velocity.x);
+      this.face(axis.x);
       return;
     }
     const angle = Phaser.Math.Angle.Between(this.x, this.y, goal.x, goal.y);
     // Wobbling on the way around an obstacle would rub it at every corner.
     const wobble = goal === target ? Math.sin((time + this.wobbleSeed) / 180) * 0.6 : 0;
     body.setVelocity(Math.cos(angle + wobble) * speed, Math.sin(angle + wobble) * speed);
-    this.face(body.velocity.x);
+    this.face(speed > 0 ? Math.cos(angle) : 0);
   }
 
-  /** Turns toward where it's heading; standing still, it keeps its facing. */
-  private face(vx: number) {
-    if (vx === 0) return;
-    this.setFlipX(this.def.facesLeft ? vx > 0 : vx < 0);
+  /**
+   * Turns toward where it's heading, `dirX` being the heading's x on a unit circle. Heading
+   * mostly up or down, or standing still, it keeps its facing: else the chase wobble would flip it back and forth.
+   */
+  private face(dirX: number) {
+    if (Math.abs(dirX) < 0.35) return;
+    this.setFlipX(this.def.facesLeft ? dirX > 0 : dirX < 0);
   }
 
   /** Fades in and out on its own cycle; hidden, it is a faint shimmer that neither hurts nor takes hits. */
@@ -222,7 +240,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setAlpha(Math.floor(time / FADE_FLICKER_MS) % 2 === 0 ? 0.85 : 0.3);
   }
 
-  /** Close in on it and it is somewhere else, with no warning. */
+  /** Close in on it and it is somewhere else, with no warning; some fire their volley the moment they land. */
   private updateBlink(target: Phaser.GameObjects.Components.Transform, time: number) {
     const blink = this.def.blink;
     if (!blink || !this.blinkTo || time < this.nextBlinkAt) return;
@@ -232,6 +250,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     (this.body as Phaser.Physics.Arcade.Body).reset(spot.x, spot.y);
     this.setAlpha(0);
     this.scene.tweens.add({ targets: this, alpha: 1, duration: 180 });
+    if (blink.volley) this.volleys?.fire(target, time, this.shoot);
   }
 
   /** Returns true while the fuse burns: it stands still, then blows up. */
@@ -241,8 +260,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.fuseEndsAt !== Infinity) return this.burnFuse(attack, time);
     if (this.distanceTo(target) > attack.triggerDistance) return false;
     this.fuseEndsAt = time + attack.fuseMs;
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    return true;
+    return this.burnFuse(attack, time);
   }
 
   /** Stands still until the fuse runs out, then triggers the explosion. */
@@ -254,46 +272,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
-  /** The rest of a burst goes out on schedule, each shot aimed anew, whatever the enemy is doing. */
-  private updateBurst(target: Phaser.GameObjects.Components.Transform, time: number) {
-    const volley = this.volley;
-    if (!volley || this.shotsLeft <= 0 || time < this.nextShotAt) return;
-    this.shotsLeft--;
-    this.nextShotAt = this.shotsLeft > 0 ? time + (volley.shotGapMs ?? 0) : Infinity;
-    this.shootFan(volley, target);
-  }
-
-  /** Returns true while the volley owns movement: standing still with glowing eyes, then firing. */
+  /** Returns true while a volley owns movement; a dash never follows one straight away. */
   private updateVolley(target: Phaser.GameObjects.Components.Transform, time: number): boolean {
-    const volley = this.volley;
-    if (!volley || !this.rangeTrigger) return false;
-    if (this.volleyFireAt !== Infinity) return this.holdVolley(volley, target, time);
-    // A dash in progress (telegraph included) keeps movement; the wait still counts meanwhile.
-    const ready = this.rangeTrigger.update(this.distanceTo(target), time);
-    if (time < this.dashingUntil || !ready || time < this.nextVolleyAt) return false;
-    if (volley.telegraphMs <= 0) {
-      this.fireVolley(volley, target);
-      return false;
-    }
-    this.startVolley(volley, time);
-    return true;
-  }
-
-  /** Stands with glowing eyes until the orbs fly. */
-  private holdVolley(volley: VolleyAttack, target: Phaser.GameObjects.Components.Transform, time: number): boolean {
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.eyes.place();
-    if (time < this.volleyFireAt) return true;
-    this.fireVolley(volley, target);
-    return true;
-  }
-
-  /** Stops with glowing eyes; the orbs fly when the glow ends. */
-  private startVolley(volley: VolleyAttack, time: number) {
-    this.volleyFireAt = time + volley.telegraphMs;
-    this.nextDashAt = Math.max(this.nextDashAt, this.volleyFireAt + VOLLEY_DASH_GAP_MS);
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.eyes.show(true);
+    const volleys = this.volleys;
+    if (!volleys) return false;
+    const owns = volleys.update(target, time, time < this.dashingUntil, this.shoot);
+    if (volleys.pending) this.nextDashAt = Math.max(this.nextDashAt, volleys.fireAt + VOLLEY_DASH_GAP_MS);
+    return owns;
   }
 
   /**
@@ -301,17 +286,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
    * without the usual wait, as long as the volley is off cooldown.
    */
   private switchesToVolley(dash: DashAttack, target: Phaser.GameObjects.Components.Transform, time: number): boolean {
-    const volley = this.volley;
-    if (!volley || dash.maxDistance === undefined) return false;
-    if (this.dashLaunchAt === Infinity || time >= this.dashLaunchAt || time < this.nextVolleyAt) return false;
+    const volleys = this.volleys;
+    if (!volleys || dash.maxDistance === undefined) return false;
+    if (this.dashLaunchAt === Infinity || time >= this.dashLaunchAt || !volleys.ready(time)) return false;
     if (this.distanceTo(target) <= dash.maxDistance) return false;
 
     this.dashLaunchAt = Infinity;
     this.dashingUntil = 0;
     // Undo the telegraph swell.
     this.scene.tweens.killTweensOf(this);
-    this.setScale(this.def.scale);
-    this.startVolley(volley, time);
+    this.setScale(this.baseScale);
+    volleys.start(time);
     return true;
   }
 
@@ -321,14 +306,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!summon) return false;
     if (this.summonAt !== Infinity) return this.channelSummon(summon, time);
     // Never on top of a dash or a volley already under way.
-    if (time < this.nextSummonAt || time < this.dashingUntil || this.volleyFireAt !== Infinity) return false;
+    if (time < this.nextSummonAt || time < this.dashingUntil || this.volleys?.pending) return false;
 
     this.nextSummonAt = time + summon.everyMs;
     this.summonAt = time + summon.telegraphMs;
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.scene.tweens.add({
       targets: this,
-      scaleY: this.def.scale * 1.2,
+      scaleY: this.baseScale * 1.2,
       duration: summon.telegraphMs / 2,
       yoyo: true,
     });
@@ -346,24 +331,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   private distanceTo(target: Phaser.GameObjects.Components.Transform): number {
     return Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
-  }
-
-  /** Aims at where the target is when the glow ends. */
-  private fireVolley(volley: VolleyAttack, target: Phaser.GameObjects.Components.Transform) {
-    this.volleyFireAt = Infinity;
-    this.nextVolleyAt = this.clock.now + volley.cooldownMs;
-    this.rangeTrigger?.reset();
-    this.eyes.show(false);
-    this.shootFan(volley, target);
-    this.shotsLeft = (volley.shots ?? 1) - 1;
-    this.nextShotAt = this.shotsLeft > 0 ? this.clock.now + (volley.shotGapMs ?? 0) : Infinity;
-  }
-
-  private shootFan(volley: VolleyAttack, target: Phaser.GameObjects.Components.Transform) {
-    const aim = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
-    for (let i = 0; i < volley.count; i++) {
-      this.shoot?.(this.x, this.y, fanAngle(aim, i, volley.count, volley.spreadDeg), volley.speed, volley.damage);
-    }
   }
 
   /** Returns true while the dash owns movement. */
@@ -405,7 +372,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (dash.telegraphMs <= 0) return;
     this.scene.tweens.add({
       targets: this,
-      scaleX: this.def.scale * 1.15,
+      scaleX: this.baseScale * 1.15,
       duration: dash.telegraphMs / 2,
       yoyo: true,
     });
@@ -418,7 +385,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
     if (this.lungeAxis) {
       body.setVelocity(this.lungeAxis.x * speed, this.lungeAxis.y * speed);
-      this.face(body.velocity.x);
+      this.face(this.lungeAxis.x);
       return;
     }
     const angle = Phaser.Math.Angle.Between(this.x, this.y, this.dashTargetX, this.dashTargetY);
@@ -477,7 +444,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   /** Pushes the next attacks back, so enemies spawned together don't strike in lockstep. */
   delayAttacks(ms: number) {
     this.nextDashAt += ms;
-    this.nextVolleyAt += ms;
+    this.volleys?.delay(ms);
   }
 
   /** Debug: sets HP to a share of the max, entering fury if that crosses the threshold. */
@@ -492,9 +459,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!this.fury?.start(this.clock.now)) return;
     this.dashLaunchAt = Infinity;
     this.dashingUntil = 0;
-    // No ranged attack in fury: a volley still glowing is called off.
-    this.volleyFireAt = Infinity;
-    this.eyes.show(false);
+    // No ranged attack in fury: a volley still warning is called off.
+    this.volleys?.cancel();
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.restoreTint();
   }
