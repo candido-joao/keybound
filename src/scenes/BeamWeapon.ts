@@ -68,7 +68,7 @@ export class BeamWeapon {
   private readonly groups: number[] = new Array<number>(MAX_PATHS).fill(0);
   /** A refracted beam starts inside the enemy that split it, and mustn't hit it again. */
   private readonly skips: (Enemy | null)[] = new Array<Enemy | null>(MAX_PATHS).fill(null);
-  /** Per group, the last enemy stamp that took its hit this tick. */
+  /** Per group, the last enemy stamp hit this tick; reused to count each group once per pile. */
   private readonly groupStamps: number[] = new Array<number>(MAX_GROUPS).fill(-1);
   private pathCount = 0;
   private groupCount = 0;
@@ -241,18 +241,24 @@ export class BeamWeapon {
         keyReach * keyReach;
       this.hitAlongPaths(player, e, onKey, now);
     }
-    this.host.piles.strikeWhere(this.inBeam, this.tickDamage);
+    this.host.piles.strikeWhere(this.pileShare, this.tickDamage);
     this.nextTickAt += BEAM.tickMs;
     this.firstTick = false;
   }
 
-  /** Whether any path touches a bone pile at (`x`, `y`); a pile takes one tick's damage however many do. */
-  private readonly inBeam = (x: number, y: number): boolean => {
+  /** Combined damage share at a pile's middle, counting each touching beam group once as for enemies. */
+  private readonly pileShare = (x: number, y: number): number => {
+    this.groupStamps.fill(-1);
+    let share = 0;
     for (let p = 0; p < this.pathCount; p++) {
+      const group = this.groups[p];
+      if (this.groupStamps[group] === 0) continue;
       const radius = (this.beamWidth * this.widths[p]) / 2 + PILE_RADIUS;
-      if (pathTouches(this.paths[p], this.pointCounts[p], x, y, radius)) return true;
+      if (!pathTouches(this.paths[p], this.pointCounts[p], x, y, radius)) continue;
+      this.groupStamps[group] = 0;
+      share += this.shares[p];
     }
-    return false;
+    return share;
   };
 
   /** Strikes target `e` once for each beam group whose path touches it. */

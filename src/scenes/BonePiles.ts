@@ -95,11 +95,13 @@ export class BonePiles {
     }
   }
 
-  /** Hurts every pile `struck` picks by its middle; Infinity breaks them outright. */
-  strikeWhere(struck: (x: number, y: number) => boolean, damage: number) {
+  /** `struck` picks each pile by its middle: true deals full damage, a number scales it; Infinity breaks it. */
+  strikeWhere(struck: (x: number, y: number) => boolean | number, damage: number) {
     for (let i = this.piles.length - 1; i >= 0; i--) {
       const { image } = this.piles[i];
-      if (struck(image.x, image.y)) this.damage(i, damage);
+      const share = struck(image.x, image.y);
+      if (!share) continue;
+      this.damage(i, damage * (share === true ? 1 : share));
     }
   }
 
