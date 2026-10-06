@@ -364,6 +364,26 @@ a {
   width: 64px;
   height: 64px;
   image-rendering: pixelated;
+  /* Animated icons are frame strips: show the first frame. */
+  object-fit: cover;
+  object-position: left;
+}
+
+/* object-position runs from the first frame (0%) to the last (100%); jump-none stops on each one. */
+.icon.strip {
+  animation: strip var(--strip-duration) steps(var(--frames), jump-none) infinite;
+}
+
+@keyframes strip {
+  to {
+    object-position: right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon.strip {
+    animation: none;
+  }
 }
 
 .orb {
