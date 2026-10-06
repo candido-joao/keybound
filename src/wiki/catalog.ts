@@ -115,6 +115,9 @@ function bossLines(def: EnemyDef): Line[] {
       params: { s: seconds(def.revive.delayMs), pct: pct(def.revive.hpShare), hp: def.revive.pileHp },
     });
   }
+  if (def.trail) {
+    lines.push({ key: 'wiki.trait.trail', params: { s: seconds(def.trail.lifeMs), damage: def.trail.damage } });
+  }
   return lines;
 }
 

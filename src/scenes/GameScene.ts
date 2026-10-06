@@ -17,11 +17,11 @@ import { HostileOrb } from '../entities/HostileOrb';
 import { DIRS, type Dir, type Floor, type RoomNode } from '../floor/FloorGenerator';
 import { setUpFloor } from '../floor/floorSetup';
 import { type PhaseDef, isFinalFloor, phaseAt } from '../floor/phases';
-import { OBSTACLE_TUNING } from '../floor/obstacles';
 import { type MessageKey, t } from '../i18n';
 import { pad } from '../input/touch';
 import { Banner } from './Banner';
 import { BeamWeapon } from './BeamWeapon';
+import { BloodPuddles } from './BloodPuddles';
 import { BonePiles } from './BonePiles';
 import type { BossIntroData } from './BossIntroScene';
 import { ChainShock, type StrikeHost } from './ChainShock';
@@ -90,6 +90,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
   drops!: RoomDrops;
   pedestals!: Pedestals;
   piles!: BonePiles;
+  puddles!: BloodPuddles;
   spawner!: EnemySpawner;
   combat!: Combat;
   rewards!: RoomRewards;
@@ -104,8 +105,6 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
   private roomsCleared = 0;
   /** Gameplay time of earlier floors; this floor's is on the clock. */
   private pastTimeMs = 0;
-  /** Whether a broken cracked rock leaves a coin. */
-  private rubbleRng!: Rng;
   private shots!: PlayerShots;
   private beamWeapon!: BeamWeapon;
   private chainShock!: ChainShock;
@@ -166,7 +165,6 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     this.endTitle = 'death.title';
     this.won = false;
     this.dropRng = new Rng(`${this.seed}:drops:${this.depth}`);
-    this.rubbleRng = new Rng(`${this.seed}:rubble:${this.depth}`);
     this.clock = new GameClock();
     // A restart after death would otherwise inherit the paused world.
     this.physics.resume();
@@ -189,6 +187,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     this.drops = new RoomDrops(this);
     this.pedestals = new Pedestals(this);
     this.piles = new BonePiles(this);
+    this.puddles = new BloodPuddles(this);
     this.spawner = new EnemySpawner(this);
     this.combat = new Combat(this);
     this.rewards = new RoomRewards(this);
@@ -271,6 +270,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
     this.combat.updateBossHealth(enemies);
     this.shots.update(enemies, delta);
     this.piles.update(time);
+    this.puddles.update(time);
     this.drops.update(delta / 1000);
     this.pedestals.update();
     this.eventDirector.update();
@@ -376,9 +376,7 @@ export class GameScene extends Phaser.Scene implements StrikeHost {
 
   /** Cracked rocks `struck` picks crumble; now and then one hides a coin. */
   breakRocks(struck: (x: number, y: number) => boolean) {
-    for (const { x, y } of this.obstacles.breakWhere(struck)) {
-      if (this.rubbleRng.chance(OBSTACLE_TUNING.rubbleCoinChance)) this.drops.spawn('currency', x, y);
-    }
+    for (const { x, y } of this.obstacles.breakWhere(struck)) this.drops.rubble(x, y);
   }
 
   // ---------------------------------------------------------------- items and stats

@@ -66,6 +66,7 @@ export const es = {
   'death.title': 'Devorado por las sombras',
   'death.greed': 'La codicia fue tu perdición',
   'death.spikes': 'Ensartado en los pinchos',
+  'death.blood': 'Ahogado en sangre',
   'victory.title': 'La última puerta se abrió',
   'pause.title': 'Pausa',
   'pause.seed': 'semilla {seed}',
@@ -264,6 +265,7 @@ export const es = {
   'wiki.trait.boss': 'Los disparos no lo empujan',
   'wiki.trait.revive':
     'Se levanta tras {s}s con {pct}% de vida, salvo que rompas los huesos antes ({hp} de daño; bloquean el paso)',
+  'wiki.trait.trail': 'Sus embestidas dejan charcos de sangre que hacen {damage} de daño durante {s}s',
   'wiki.trait.fade': 'Aparece y desaparece; oculto, ni hace ni recibe daño',
   'wiki.trait.blink': 'Se teletransporta lejos cuando te acercas',
   'wiki.trait.blink-volley': 'Se teletransporta lejos cuando te acercas y ataca en cuanto reaparece',

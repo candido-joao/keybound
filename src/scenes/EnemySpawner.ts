@@ -110,6 +110,7 @@ export class EnemySpawner {
     enemy.summon = this.summonMinions;
     enemy.explode = game.combat.explode;
     enemy.blinkTo = this.blinkSpot;
+    enemy.bleed = game.puddles.spill;
     enemy.speedScale = game.player.stats.enemySpeed;
     return enemy;
   }

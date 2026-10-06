@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { ROOM_H, ROOM_W, ROOM_X, ROOM_Y, TILE } from '../config';
 import { DROPS, type DropKind, applyDrop, canCollect } from '../combat/drops';
+import { Rng } from '../core/rng';
+import { OBSTACLE_TUNING } from '../floor/obstacles';
 import type { RoomNode } from '../floor/FloorGenerator';
 import type { GameScene } from './GameScene';
 
@@ -22,9 +24,18 @@ export class RoomDrops {
   private readonly game: GameScene;
   private drops: Drop[] = [];
   private readonly left = new Map<RoomNode, { kind: DropKind; x: number; y: number }[]>();
+  /** Whether a broken cracked rock leaves a coin. */
+  private readonly rubbleRng: Rng;
 
+  /** Built anew for each floor, after the run is loaded. */
   constructor(game: GameScene) {
     this.game = game;
+    this.rubbleRng = new Rng(`${game.seed}:rubble:${game.depth}`);
+  }
+
+  /** Now and then a broken cracked rock hides a coin. */
+  rubble(x: number, y: number) {
+    if (this.rubbleRng.chance(OBSTACLE_TUNING.rubbleCoinChance)) this.spawn('currency', x, y);
   }
 
   /** Lands near (`x`, `y`), off the walls and off any obstacle, popping in. */

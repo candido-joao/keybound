@@ -66,6 +66,7 @@ export const enUS = {
   'death.title': 'Swallowed by the shadows',
   'death.greed': 'Greed was your undoing',
   'death.spikes': 'Impaled on the spikes',
+  'death.blood': 'Drowned in blood',
   'victory.title': 'The last door opened',
   'pause.title': 'Paused',
   'pause.seed': 'seed {seed}',
@@ -261,6 +262,7 @@ export const enUS = {
   'wiki.trait.boss': "Shots don't push it",
   'wiki.trait.revive':
     'Gets back up after {s}s with {pct}% HP, unless you break the bones first ({hp} damage; they block your way)',
+  'wiki.trait.trail': 'Its dashes leave pools of blood that deal {damage} damage for {s}s',
   'wiki.trait.fade': 'Fades in and out; while hidden it neither hurts nor takes hits',
   'wiki.trait.blink': 'Teleports away when you come close',
   'wiki.trait.blink-volley': 'Teleports away when you get close, and attacks the moment it reappears',
