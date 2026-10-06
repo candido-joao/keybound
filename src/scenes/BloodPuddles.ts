@@ -4,8 +4,8 @@ import { type Puddle, inPuddle, puddleAlpha, puddleSlot, wet } from '../combat/p
 import type { RoomNode } from '../floor/FloorGenerator';
 import type { GameScene } from './GameScene';
 
-/** Enough for two dashes' trails and a furious one; past that the oldest puddle dries early. */
-const POOL_SIZE = 32;
+/** Room for two colossi's overlapping trails through their full puddle lifetime. */
+const POOL_SIZE = 64;
 
 interface Slot extends Puddle {
   image: Phaser.GameObjects.Image;
