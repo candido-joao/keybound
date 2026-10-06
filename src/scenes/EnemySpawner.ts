@@ -110,6 +110,7 @@ export class EnemySpawner {
     enemy.summon = this.summonMinions;
     enemy.explode = game.combat.explode;
     enemy.blinkTo = this.blinkSpot;
+    enemy.bleed = game.puddles.spill;
     enemy.speedScale = game.player.stats.enemySpeed;
     return enemy;
   }
@@ -131,7 +132,7 @@ export class EnemySpawner {
       const sx = Phaser.Math.Clamp(x + Math.cos(angle) * radius, ROOM_X + margin, ROOM_X + ROOM_W - margin);
       const sy = Phaser.Math.Clamp(y + Math.sin(angle) * radius, ROOM_Y + margin, ROOM_Y + ROOM_H - margin);
       const spot = this.game.obstacles.snap(sx, sy);
-      this.spawn(def, spot.x, spot.y, rng.next() * 1000);
+      this.spawn(def, spot.x, spot.y, rng.next() * 1000).offspring = true;
     }
   }
 

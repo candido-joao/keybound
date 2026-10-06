@@ -75,13 +75,25 @@ export interface BlinkMove {
   volley?: boolean;
 }
 
-/** Falls into a pile instead of dying, and gets back up unless the player steps on the pile first. */
+/** Falls into a pile instead of dying, and gets back up unless the player breaks the pile first. */
 export interface Revive {
   delayMs: number;
+  /** Damage that breaks the pile for good; the pile blocks the player meanwhile. */
+  pileHp: number;
   /** Share of max HP it gets back up with. */
   hpShare: number;
   /** How many times it gets back up; the death after that is for good. */
   times: number;
+}
+
+/** Every dash, calm or furious, leaves a line of puddles that hurt the player until they dry. */
+export interface BloodTrail {
+  /** A puddle this often while the dash lasts. */
+  everyMs: number;
+  radius: number;
+  /** How long a puddle stays, the fade before it dries included. */
+  lifeMs: number;
+  damage: number;
 }
 
 /**
@@ -153,6 +165,7 @@ export interface EnemyDef {
   fade?: FadeCycle;
   blink?: BlinkMove;
   revive?: Revive;
+  trail?: BloodTrail;
   /** Breaks into `count` plain `id` enemies when it dies. */
   split?: { id: string; count: number };
   /** Color of a silhouette drawn around the body; cursed enemies get one. */
@@ -205,7 +218,7 @@ export const SHADOW_CASTER: EnemyDef = {
   deathColor: 0x3a1f4a,
 };
 
-/** Slow and frail, but it gets back up once, unless the player steps on the bones first. */
+/** Slow and frail, but it gets back up once, unless the player breaks the bones first. */
 export const BONES: EnemyDef = {
   id: 'bones',
   name: 'enemy.bones',
@@ -219,7 +232,8 @@ export const BONES: EnemyDef = {
   contactDamage: 10,
   boss: false,
   attacks: [],
-  revive: { delayMs: 4000, hpShare: 0.5, times: 1 },
+  // Two plain bolts break the pile.
+  revive: { delayMs: 4000, pileHp: 7, hpShare: 0.5, times: 1 },
   deathColor: 0xb8ab84,
 };
 
@@ -297,17 +311,18 @@ function tweakAttacks(def: EnemyDef, changes: AttackChanges): EnemyAttack[] {
   return def.attacks.map((attack) => ({ ...attack, ...changes[attack.kind] }) as EnemyAttack);
 }
 
-/** Dashes more often, and its volley comes in two fans. */
+/**
+ * Bleeds where it dashes: each lunge leaves puddles that hurt, so the floor safe to dodge on
+ * shrinks as the fight goes on. Its volley comes in two fans.
+ */
 export const BLOOD_COLOSSUS = bossVariant(SHADOW_COLOSSUS, {
   id: 'blood-colossus',
   name: 'boss.blood-colossus',
   texture: 'blood-colossus',
   deathColor: 0x5a1414,
-  speed: 80,
-  attacks: tweakAttacks(SHADOW_COLOSSUS, {
-    dash: { everyMs: 1500, telegraphMs: 340 },
-    volley: { shots: 2, shotGapMs: 350 },
-  }),
+  attacks: tweakAttacks(SHADOW_COLOSSUS, { volley: { shots: 2, shotGapMs: 350 } }),
+  // A puddle every ~28 px of a calm dash, wider than that apart, so the line reads unbroken.
+  trail: { everyMs: 60, radius: 22, lifeMs: 4500, damage: 5 },
 });
 
 /**
@@ -969,3 +984,6 @@ export const walkAnimKey = (texture: string) => `walk:${texture}`;
 /** What a revived enemy leaves on the floor; its strip loops like a walk. */
 export const BONE_PILE = 'bone-pile';
 export const BONE_PILE_FRAMES = 3;
+
+/** What a bleeding enemy's trail leaves on the floor. */
+export const BLOOD_PUDDLE = 'blood-puddle';

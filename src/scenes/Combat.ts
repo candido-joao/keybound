@@ -57,30 +57,30 @@ export class Combat {
     enemy.die();
     // A mini boss's death pays the event: it doesn't get back up.
     if (def.revive && !def.miniBoss && enemy.revivals < def.revive.times) {
-      this.game.piles.drop(def, x, y, enemy.revivals);
+      this.game.piles.drop(def, x, y, enemy.revivals, enemy.offspring);
       return;
     }
-    this.reward(def, x, y);
+    this.reward(def, x, y, !enemy.offspring);
     if (def.split) this.game.spawner.split(def, x, y);
   }
 
   /** Kill count, drops and what a boss's fall sets off. */
-  reward(def: EnemyDef, x: number, y: number) {
+  reward(def: EnemyDef, x: number, y: number, coins = true) {
     const game = this.game;
     game.kills++;
-    const kinds = this.rollDrops(def);
+    const kinds = this.rollDrops(def, coins);
     for (const kind of kinds) game.drops.spawn(kind, x, y);
     game.eventDirector.onDrops(kinds);
     if (def.boss && game.room.event === 'twin') this.enrageSurvivingBosses();
   }
 
   /** A cursed enemy rolls twice; a boss always leaves a heal. */
-  private rollDrops(def: EnemyDef): DropKind[] {
+  private rollDrops(def: EnemyDef, coins: boolean): DropKind[] {
     const game = this.game;
     const rolls = def.cursed ? 2 : 1;
     const kinds: DropKind[] = [];
     for (let i = 0; i < rolls; i++) {
-      const roll = rollDrops(game.dropRng, game.luck, game.player.stats.healOdds);
+      const roll = rollDrops(game.dropRng, game.luck, game.player.stats.healOdds, coins);
       game.luck = roll.luck;
       kinds.push(...roll.drops);
     }
@@ -106,6 +106,7 @@ export class Combat {
     }
     // A rock counts as caught once the blast reaches its middle.
     game.breakRocks((rx, ry) => inBlast(rx - x, ry - y, blast.radius));
+    game.piles.strikeWhere((px, py) => inBlast(px - x, py - y, blast.radius), Infinity);
     if (enemy.active) this.kill(enemy);
   };
 

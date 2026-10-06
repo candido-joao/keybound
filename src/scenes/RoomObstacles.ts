@@ -49,6 +49,8 @@ export class RoomObstacles {
   private steering = false;
   /** Cell the flow fields lead to; -1 forces a rebuild. */
   private targetCell = -1;
+  /** The player's cell, kept while a crowd change clears `targetCell`. */
+  private playerCell = -1;
   private readonly waypoint: Point = { x: 0, y: 0 };
   private readonly spot: Point = { x: 0, y: 0 };
   private readonly held: Point = { x: 0, y: 0 };
@@ -132,6 +134,7 @@ export class RoomObstacles {
     const col = colAt(x);
     const row = rowAt(y);
     const cell = cellIndex(col, row);
+    this.playerCell = cell;
     if (cell === this.targetCell) return;
     this.targetCell = cell;
     this.builtCrowd.set(this.crowd);
@@ -183,7 +186,8 @@ export class RoomObstacles {
   /**
    * Where an enemy should head to reach `target`: the target itself while the way is straight,
    * else the next cell on the path around what's in between. Its own spot (stand still) when
-   * that cell is taken and there's no short way around: it queues. The returned point is shared.
+   * that cell is taken and there's no short way around: it queues, except for the player's own
+   * cell, which it crowds into. The returned point is shared.
    */
   readonly steer = (enemy: Enemy, target: Point): Point => {
     if (!this.steering) return target;
@@ -193,7 +197,8 @@ export class RoomObstacles {
     if (straightPath(this.grid, flying, body.center, target, body.halfWidth)) return target;
     const next = (flying ? this.air : this.ground).next(colAt(x), rowAt(y));
     if (next < 0) return target;
-    if (!enemy.def.ghost && this.crowd[next] > 0) return this.hold(enemy);
+    // The player's cell never clears, since whoever got there stays: waiting on it queues for good.
+    if (!enemy.def.ghost && next !== this.playerCell && this.crowd[next] > 0) return this.hold(enemy);
     const col = next % ROOM_COLS;
     this.waypoint.x = tileX(col);
     this.waypoint.y = tileY((next - col) / ROOM_COLS);

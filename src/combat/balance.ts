@@ -22,7 +22,7 @@ export const BASE_STATS: PlayerStats = {
   currencyValue: 1,
   echoShots: 0,
   echoDamage: 0.5,
-  invulnMs: 650,
+  invulnMs: 800,
   enemySpeed: 1,
   orbSpeed: 1,
   beam: 0,
@@ -72,7 +72,7 @@ export const CHAIN_COOLDOWN_MS = 250;
 
 /** Chances per kill. The heal orb odds rise by `healPerMiss` for each kill without one. */
 export const DROP_ODDS = {
-  currency: 0.35,
+  currency: 0.28,
   heal: 0.06,
   healPerMiss: 0.03,
 } as const;

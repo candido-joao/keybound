@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { KNOCKBACK } from '../combat/balance';
 import { type Axis, alignedAxis, dominantAxis, fadeSolid, fadeState } from '../combat/behaviors';
 import {
+  type BloodTrail,
   type DashAttack,
   type EnemyDef,
   type ExplodeAttack,
@@ -44,6 +45,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   hp: number;
   /** Times it has got back up from a bone pile. */
   revivals = 0;
+  /** Split off or summoned by another enemy: it drops no coins, else a summoner would be a coin farm. */
+  offspring = false;
   readonly def: EnemyDef;
   /** Its own art may be drawn bigger than the placeholder: `def.scale` turned into the sprite's scale. */
   private readonly baseScale: number;
@@ -77,6 +80,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   /** Set by GameScene: where a blink lands. Without it the enemy never blinks. */
   blinkTo?: (enemy: Enemy) => { x: number; y: number };
   private nextBlinkAt = 0;
+
+  /** Set by GameScene; without it the enemy leaves no trail. */
+  bleed?: (x: number, y: number, trail: BloodTrail) => void;
+  private nextBleedAt = 0;
 
   /** Set by GameScene; without it the enemy never fires. */
   shoot?: OrbShooter;
@@ -185,9 +192,25 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
     if (time < this.knockedUntil) return;
+    this.updateTrail(time);
     if (this.attack(target, time)) return;
     this.updateBlink(target, time);
     this.walk(target, time);
+  }
+
+  /** Mid lunge, calm or furious, it leaves a puddle every `trail.everyMs`. */
+  private updateTrail(time: number) {
+    const trail = this.def.trail;
+    if (!trail || !this.bleed || time < this.nextBleedAt || !this.lunging(time)) return;
+    this.nextBleedAt = time + trail.everyMs;
+    const feet = (this.body as Phaser.Physics.Arcade.Body).center;
+    this.bleed(feet.x, feet.y, trail);
+  }
+
+  /** Past the telegraph and still dashing: the calm dash, or the fury's. */
+  private lunging(time: number): boolean {
+    if (this.fury?.dashing(time)) return true;
+    return this.dashLaunchAt === Infinity && time < this.dashingUntil;
   }
 
   /** Returns true while an attack owns movement: the fury's dashes, or else the first calm attack under way. */

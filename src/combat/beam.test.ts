@@ -17,18 +17,18 @@ const stats = { ...BASE_STATS, beam: 1 };
 const ROOM = { minX: 0, minY: 0, maxX: 500, maxY: 300 };
 
 describe('beam charge', () => {
-  it('takes twice the fire delay', () => {
-    expect(beamChargeMs(stats)).toBe(BASE_STATS.fireDelay * 2);
+  it('takes one and a half times the fire delay', () => {
+    expect(beamChargeMs(stats)).toBe(BASE_STATS.fireDelay * 1.5);
   });
 
   it('turns continuous once the charge gets short enough', () => {
     expect(isContinuousBeam(stats)).toBe(false);
-    expect(isContinuousBeam({ ...stats, fireDelay: 250 })).toBe(true);
-    expect(isContinuousBeam({ ...stats, fireDelay: 251 })).toBe(false);
+    expect(isContinuousBeam({ ...stats, fireDelay: 333 })).toBe(true);
+    expect(isContinuousBeam({ ...stats, fireDelay: 334 })).toBe(false);
   });
 
   it('reaches continuous with a faster-charging beam at a slower fire rate', () => {
-    expect(isContinuousBeam({ ...stats, fireDelay: 500, beamCharge: 0.5 })).toBe(true);
+    expect(isContinuousBeam({ ...stats, fireDelay: 600, beamCharge: 0.5 })).toBe(true);
   });
 
   it('counts stages up to full', () => {
@@ -60,8 +60,8 @@ describe('releasePower', () => {
     expect(releasePower(0.2)).toBe(0);
   });
 
-  it('pays early releases at half efficiency', () => {
-    expect(releasePower(0.5)).toBe(0.25);
+  it('pays early releases at three quarters efficiency', () => {
+    expect(releasePower(0.5)).toBe(0.375);
   });
 
   it('pays a full charge in full', () => {
